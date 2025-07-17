@@ -1,1 +1,10 @@
 https://eo3v942nix0chzn.m.pipedream.net
+
+# Trigger
+
+This Pipedream workflow is triggered via a webhook from Tiledesk. It receives:
+
+- `message`: the user's question from chat
+- `email`: the user's email (used to fetch their STRUKT profile)
+
+This step passes both values to the next stages of the pipeline.
