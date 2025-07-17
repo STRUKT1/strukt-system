@@ -1,0 +1,5 @@
+{
+  "model": "{{steps.prepare_openai_payload.$return_value.model}}",
+  "temperature": {{steps.prepare_openai_payload.$return_value.temperature}},
+  "messages": {{JSON.stringify(steps.prepare_openai_payload.$return_value.messages)}}
+}
