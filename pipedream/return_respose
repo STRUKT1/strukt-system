@@ -1,0 +1,15 @@
+export default defineComponent({
+  async run({ steps, $ }) {
+    const aiReply = steps.custom_request.$return_value.choices[0].message.content;
+
+    return {
+      statusCode: 200,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        reply: aiReply
+      })
+    };
+  }
+});
