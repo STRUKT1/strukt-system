@@ -1,0 +1,79 @@
+export default defineComponent({
+  async run({ steps }) {
+    const data = steps.get_user_data.$return_value;
+
+    function safe(label, fieldName) {
+      const value = data[fieldName];
+      return value ? `**${label}:** ${value}` : '';
+    }
+
+    const fields = [
+      safe("Full Name", "Full Name"),
+      safe("Email Address", "Email Address"),
+      safe("Gender Identity", "Gender Identity"),
+      safe("Gender Identity (Self-Described)", "Gender Identity (Self-Described)"),
+      safe("Pronouns", "Pronouns"),
+      safe("Pronouns (Self-Described)", "Pronouns (Self-Described)"),
+      safe("Date of Birth", "Date of Birth"),
+      safe("Height", "Height"),
+      safe("Starting Weight", "Starting Weight (kg)"),
+      safe("Current Weight", "Current Weight (kg)"),
+      safe("Goal Weight", "Goal Weight (kg)"),
+      safe("Body Type", "Body Type"),
+      safe("Main Goal", "Main Goal"),
+      safe("Dietary Needs/Allergies", "Dietary Needs/Allergies"),
+      safe("Medical Considerations", "Medical Considerations"),
+      safe("Activity Level", "Activity Level"),
+      safe("Equipment Access", "Equipment Access"),
+      safe("STRUKT Tier", "STRUKT Tier"),
+      safe("Charity Choice", "Charity Choice"),
+      safe("Start Date", "Start Date"),
+      safe("Onboarding Complete", "Onboarding Complete"),
+      safe("Daily Routine", "Daily Routine"),
+      safe("Work Schedule / Commitments", "Work Schedule / Commitments"),
+      safe("Preferred Workout Time", "Preferred Workout Time"),
+      safe("Anything else you'd like us to know?", "Anything else you'd like us to know?"),
+      safe("Preferred Coaching Tone", "Preferred Coaching Tone"),
+      safe("Preferred Reminder/Nudge Times", "Preferred Reminder/Nudge Times"),
+      safe("Anything else about how you prefer to be coached?", "Anything else you’d like us to know about how you prefer to be coached?"),
+      safe("Ethnicity / Cultural Background", "Ethnicity / Cultural Background"),
+      safe("Ethnicity (Self-Describe)", "Ethnicity (Self-Describe)"),
+      safe("Religion / Faith", "Religion / Faith"),
+      safe("Religion (Self-Describe)", "Religion (Self-Describe)"),
+      safe("Accessibility or Support Needs", "Accessibility or Support Needs"),
+      safe("Current Nutrition Style", "Current Nutrition Style"),
+      safe("Current Challenges with Nutrition", "Current Challenges with Nutrition"),
+      safe("Nutrition Goals", "Nutrition Goals"),
+      safe("Food Preferences / Dietary Needs", "Food Preferences / Dietary Needs"),
+      safe("Cultural or Religious Food Influence", "Any cultural/religious influences on food?"),
+      safe("Generate Meal Suggestions?", "Would you like STRUKT to generate suggested meals?"),
+      safe("Do you track calories/macros?", "Do you track calories/macros?"),
+      safe("Allergies & Food Intolerances", "Allergies & Food Intolerances"),
+      safe("Currently training?", "Are you currently doing any workout or training?"),
+      safe("Current training routine", "If yes, what does your current training look like?"),
+      safe("Workout Preferences", "What type of workouts do you enjoy or want to try?"),
+      safe("Workout Location", "Where do you usually work out?"),
+      safe("Equipment Access (repeat)", "What equipment do you have access to?"),
+      safe("Time for training weekly", "How much time do you realistically have for training each week?"),
+      safe("Injuries or limitations", "Do you have any injuries or movement limitations we should be aware of?"),
+      safe("Movement Goal", "What's your main goal when it comes to movement?"),
+      safe("Currently taking supplements?", "Currently taking supplements?"),
+      safe("Current Supplements", "If yes, please list your current supplements."),
+      safe("Reasons for taking supplements", "Reasons for Taking Them"),
+      safe("Past supplement reactions", "Any past Reactions or Intolerances?"),
+      safe("Open to Supplement Suggestions", "Are you open to Supplement Suggestions?"),
+      safe("Typical Sleep Duration", "Typical Sleep Duration (hrs)"),
+      safe("Sleep Quality", "Sleep Quality"),
+      safe("Usual Bedtime", "Usual Bedtime"),
+      safe("Usual Wake Time", "Usual Wake Time"),
+      safe("Sleep Challenges", "Sleep Challenges (optional)"),
+      safe("Vision of Success", "Vision of Success"),
+      safe("Custom Plan Summary", "Custom Plan Summary"),
+      safe("AI Coach Notes", "AI Coach Notes"),
+    ].filter(Boolean); // removes any blank values
+
+    return {
+      message: fields.join('\n\n')
+    };
+  }
+});
