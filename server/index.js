@@ -1,21 +1,53 @@
 import express from 'express';
 import cors from 'cors';
-import bodyParser from 'body-parser';
+import axios from 'axios';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-// Health check route
+// Health check
 app.get('/', (req, res) => {
   res.send('STRUKT Server is alive and ready 🚀');
 });
 
-// Build STRUKT AI prompt
-const buildPrompt = (user, question) => {
-  return `
+// Ask Coach endpoint
+app.post('/api/ask-coach', async (req, res) => {
+  const { email, question } = req.body;
+
+  if (!email || !question) {
+    return res.status(400).json({ success: false, error: 'Missing email or question.' });
+  }
+
+  // Step 1: Fetch user from Airtable
+  try {
+    const airtableResponse = await axios.get(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_USER_TABLE_ID}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`
+      },
+      params: {
+        filterByFormula: `LOWER({Email Address}) = '${email.toLowerCase()}'`,
+        maxRecords: 1
+      }
+    });
+
+    const records = airtableResponse.data.records;
+    if (!records.length) {
+      return res.status(404).json({ success: false, error: 'User not found in Airtable.' });
+    }
+
+    const user = records[0].fields;
+
+    // Step 2: Build coaching context
+    const coachingContext = Object.entries(user)
+      .map(([key, value]) => value && `${key}: ${value}`)
+      .filter(Boolean)
+      .join('\n');
+
+    // Step 3: STRUKT Coach Prompt
+    const systemPrompt = `
 You are the official STRUKT Coach: a friendly, professional, inclusive AI assistant that gives clear, goal-driven support based on a member’s onboarding answers and real-time logs (meals, workouts, weight, sleep, supplements, mood, etc).
 
 STRUKT is a subscription-based coaching system that supports fat loss, muscle gain, health improvements, and mindset shifts.
@@ -34,37 +66,7 @@ You can generate:
 ---
 
 🧠 MEMBER CONTEXT:
-
-- **Full Name**: ${user['Full Name'] || 'N/A'}
-- **Pronouns**: ${user['Pronouns'] || 'N/A'}
-- **Gender Identity**: ${user['Gender Identity'] || user['Gender Identity (Self-Described)'] || 'N/A'}
-- **Body Type**: ${user['Body Type'] || 'N/A'}
-- **Main Goal**: ${user['Main Goal'] || 'N/A'}
-- **Activity Level**: ${user['Activity Level'] || 'N/A'}
-- **Workout Preferences**: ${user['What type of workouts do you enjoy or want to try?'] || 'N/A'}
-- **Equipment Access**: ${user['What equipment do you have access to?'] || 'N/A'}
-- **Workout Location**: ${user['Where do you usually work out?'] || 'N/A'}
-- **Training Time Available**: ${user['How much time do you realistically have for training each week?'] || 'N/A'}
-- **Injuries / Limitations**: ${user['Do you have any injuries or movement limitations we should be aware of?'] || 'None'}
-- **Supplement Use**: ${user['Currently taking supplements?'] || 'N/A'}
-- **Supplements List**: ${user['If yes, please list your current supplements.'] || 'N/A'}
-- **Sleep Duration**: ${user['Typical Sleep Duration (hrs)'] || 'N/A'}
-- **Sleep Quality**: ${user['Sleep Quality'] || 'N/A'}
-- **Bedtime**: ${user['Usual Bedtime'] || 'N/A'}
-- **Wake Time**: ${user['Usual Wake Time'] || 'N/A'}
-- **Sleep Challenges**: ${user['Sleep Challenges (optional)'] || 'N/A'}
-- **Nutrition Style**: ${user['Current Nutrition Style'] || 'N/A'}
-- **Nutrition Challenges**: ${user['Current Challenges with Nutrition'] || 'N/A'}
-- **Nutrition Goals**: ${user['Nutrition Goals'] || 'N/A'}
-- **Allergies**: ${user['Allergies & Food Intolerances'] || 'N/A'}
-- **Medical Considerations**: ${user['Medical Considerations'] || 'N/A'}
-- **Religion / Faith**: ${user['Religion / Faith'] || 'N/A'}
-- **Cultural Food Notes**: ${user['Any cultural/religious influences on food?'] || 'N/A'}
-- **Accessibility Needs**: ${user['Accessibility or Support Needs'] || 'N/A'}
-- **Daily Routine**: ${user['Daily Routine'] || 'N/A'}
-- **Work Schedule**: ${user['Work Schedule / Commitments'] || 'N/A'}
-- **Preferred Coaching Tone**: ${user['Preferred Coaching Tone'] || 'Friendly'}
-- **Vision of Success**: ${user['Vision of Success'] || 'N/A'}
+${coachingContext}
 
 ---
 
@@ -102,69 +104,42 @@ You are never rude, sarcastic, or condescending. You are empowering and smart �
   - 💬 Prompts/nudges
   - 🔁 Logging reminders
 - Never overuse emojis — keep it stylish and helpful.
+`;
 
----
+    // Step 4: Ask OpenAI
+    const aiResponse = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: question }
+        ],
+        temperature: 0.7
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
-💬 USER QUESTION:
-"${question}"
+    const reply = aiResponse.data.choices[0].message.content;
 
-🎯 YOUR TASK:
-Reply like a world-class coach. Be specific, helpful, and uplifting. Reference their personal info if relevant. Always act in the user's best interest.
-`.trim();
-};
+    res.json({
+      success: true,
+      email,
+      question,
+      response: reply
+    });
 
-// POST /api/ask-coach
-app.post('/api/ask-coach', async (req, res) => {
-  const { email, question } = req.body;
-
-  // 🔁 TEMP MOCKED USER DATA (replace with Airtable lookup)
-  const user = {
-    "Full Name": "Therese",
-    "Pronouns": "She/Her",
-    "Gender Identity": "Female",
-    "Gender Identity (Self-Described)": "",
-    "Body Type": "Slim athletic",
-    "Main Goal": "Fat loss & strength",
-    "Activity Level": "Moderate",
-    "What type of workouts do you enjoy or want to try?": "Home workouts and running",
-    "What equipment do you have access to?": "Dumbbells, treadmill, resistance bands",
-    "Where do you usually work out?": "At home",
-    "How much time do you realistically have for training each week?": "3–4 hours",
-    "Do you have any injuries or movement limitations we should be aware of?": "Postpartum pelvic floor healing",
-    "Currently taking supplements?": "Yes",
-    "If yes, please list your current supplements.": "Protein, iron, magnesium",
-    "Typical Sleep Duration (hrs)": "6",
-    "Sleep Quality": "Interrupted",
-    "Usual Bedtime": "10:30pm",
-    "Usual Wake Time": "6:30am",
-    "Sleep Challenges (optional)": "Baby waking",
-    "Current Nutrition Style": "Whole foods, 80/20 balance",
-    "Current Challenges with Nutrition": "Snacking, energy crashes",
-    "Nutrition Goals": "Balanced eating, fat loss",
-    "Allergies & Food Intolerances": "Peanuts",
-    "Medical Considerations": "Postpartum recovery",
-    "Religion / Faith": "Christian",
-    "Any cultural/religious influences on food?": "No pork",
-    "Accessibility or Support Needs": "",
-    "Daily Routine": "School runs, part-time work, parenting",
-    "Work Schedule / Commitments": "Flexible hours",
-    "Preferred Coaching Tone": "Motivational",
-    "Vision of Success": "Feeling strong, energised, and proud"
-  };
-
-  const prompt = buildPrompt(user, question);
-
-  // 🧠 Placeholder AI response (replace with OpenAI call)
-  const fakeAIResponse = `Hi ${user['Full Name']}, based on your current goal and routine, I recommend a 25-minute strength circuit using dumbbells 💪, followed by a short run or walk. Stay hydrated, fuel with whole foods, and log your progress. You’re smashing it! 🏋️‍♀️`;
-
-  res.json({
-    success: true,
-    email,
-    question,
-    response: fakeAIResponse
-  });
+  } catch (error) {
+    console.error('❌ Error:', error.response?.data || error.message);
+    res.status(500).json({ success: false, error: 'Something went wrong.' });
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`✅ Server listening on port ${PORT}`);
 });
