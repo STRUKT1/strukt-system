@@ -18,13 +18,15 @@ app.post('/api/ask-coach', async (req, res) => {
   try {
     const AIRTABLE_BASE = process.env.AIRTABLE_BASE_ID;
     const USERS_TABLE = process.env.AIRTABLE_USER_TABLE_ID;
-    const CHAT_TABLE = process.env.AIRTABLE_CHAT_TABLE_ID;
+    const INTERACTIONS_TABLE = 'tblDtOOmahkMYEqmy'; // Chat Interactions table
 
-    // STEP 1 – Lookup user from Airtable
+    // STEP 1 – Lookup Airtable user
     const userRes = await axios.get(
       `https://api.airtable.com/v0/${AIRTABLE_BASE}/${USERS_TABLE}?filterByFormula={Email Address}='${email}'`,
       {
-        headers: { Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}` },
+        headers: {
+          Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
+        },
       }
     );
 
@@ -33,7 +35,7 @@ app.post('/api/ask-coach', async (req, res) => {
 
     const f = user.fields;
 
-    // STEP 2 – Build coaching context
+    // STEP 2 – Build context
     const context = `
 Name: ${f['Full Name'] || 'Not set'}
 Pronouns: ${f['Pronouns'] || 'Not set'}
@@ -48,7 +50,7 @@ Preferred Tone: ${f['Preferred Coaching Tone']?.join(', ') || 'Default'}
 Vision of Success: ${f['Vision of Success'] || ''}
 `;
 
-    // STEP 3 – Prompt for the AI coach
+    // STEP 3 – Coach Instructions
     const systemPrompt = `
 You are the STRUKT Coach — a warm, smart, structured fitness and mindset AI.
 
@@ -79,43 +81,38 @@ Give the best possible reply to this question:
       }
     );
 
-    const reply = aiRes.data.choices[0]?.message?.content || 'No response generated.';
+    const response = aiRes.data.choices[0]?.message?.content || 'No response generated.';
 
-    // STEP 5 – Log chat interaction to Airtable (using field NAMES for compatibility)
+    // STEP 5 – Log to Chat Interactions table
     try {
-  const logRes = await axios.post(
-    `https://api.airtable.com/v0/${AIRTABLE_BASE}/${INTERACTIONS_TABLE}`,
-    {
-      records: [
+      await axios.post(
+        `https://api.airtable.com/v0/${AIRTABLE_BASE}/${INTERACTIONS_TABLE}`,
         {
-          fields: {
-            User: [user.id],
-            'User Email': [f['Email Address']],
-            Topic: detectTopic(question),
-            Message: question,
-            'AI Response': response,
-          },
+          records: [
+            {
+              fields: {
+                User: [user.id], // Airtable record ID of the user
+                'User Email': [f['Email Address']],
+                Topic: detectTopic(question),
+                Message: question,
+                'AI Response': response,
+              },
+            },
+          ],
         },
-      ],
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
-  console.log(`✅ Interaction logged for ${email}`);
-} catch (logErr) {
-  console.error('🔥 Airtable LOGGING ERROR:', logErr.response?.data || logErr.message);
-}
-
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
       console.log(`✅ Interaction logged for ${email}`);
     } catch (logErr) {
-      console.error('⚠️ Could not log chat interaction:', logErr.message);
+      console.error('🔥 Airtable LOGGING ERROR:', logErr.response?.data || logErr.message);
     }
 
-    res.json({ success: true, email, response: reply });
+    res.json({ success: true, email, response });
   } catch (err) {
     console.error('🔥 ERROR:', err.message);
     res.json({
@@ -126,7 +123,7 @@ Give the best possible reply to this question:
   }
 });
 
-// Utility: detect topic
+// Utility: Quick topic tagging
 function detectTopic(text) {
   const t = text.toLowerCase();
   if (t.includes('meal') || t.includes('calories') || t.includes('food')) return 'Nutrition';
@@ -136,4 +133,4 @@ function detectTopic(text) {
   return 'Other';
 }
 
-app.listen(PORT, () => console.log(`🚀 STRUKT Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 STRUKT Server running on ${PORT}`));
