@@ -83,29 +83,32 @@ Give the best possible reply to this question:
 
     // STEP 5 – Log chat interaction to Airtable (using field NAMES for compatibility)
     try {
-      await axios.post(
-        `https://api.airtable.com/v0/${AIRTABLE_BASE}/${CHAT_TABLE}`,
+  const logRes = await axios.post(
+    `https://api.airtable.com/v0/${AIRTABLE_BASE}/${INTERACTIONS_TABLE}`,
+    {
+      records: [
         {
-          records: [
-            {
-              fields: {
-                Name: `Chat – ${new Date().toLocaleString()}`,
-                User: [user.id],
-                'User Email': [f['Email Address']],
-                Topic: detectTopic(question),
-                Message: question,
-                'AI Response': reply,
-              },
-            },
-          ],
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
-            'Content-Type': 'application/json',
+          fields: {
+            User: [user.id],
+            'User Email': [f['Email Address']],
+            Topic: detectTopic(question),
+            Message: question,
+            'AI Response': response,
           },
-        }
-      );
+        },
+      ],
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+  console.log(`✅ Interaction logged for ${email}`);
+} catch (logErr) {
+  console.error('🔥 Airtable LOGGING ERROR:', logErr.response?.data || logErr.message);
+}
 
       console.log(`✅ Interaction logged for ${email}`);
     } catch (logErr) {
