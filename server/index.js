@@ -18,21 +18,18 @@ app.post('/api/ask-coach', async (req, res) => {
   try {
     const AIRTABLE_BASE = process.env.AIRTABLE_BASE_ID;
     const USERS_TABLE = process.env.AIRTABLE_USER_TABLE_ID;
-    const INTERACTIONS_TABLE = 'tblDtOOmahkMYEqmy'; // Chat Interactions table
+    const CHAT_TABLE = 'tblDtOOmahkMYEqmy';
 
     // STEP 1 – Lookup Airtable user
     const userRes = await axios.get(
       `https://api.airtable.com/v0/${AIRTABLE_BASE}/${USERS_TABLE}?filterByFormula={Email Address}='${email}'`,
       {
-        headers: {
-          Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
-        },
+        headers: { Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}` },
       }
     );
 
     const user = userRes.data.records?.[0];
     if (!user) throw new Error('❌ No user found');
-
     const f = user.fields;
 
     // STEP 2 – Build context
@@ -50,20 +47,16 @@ Preferred Tone: ${f['Preferred Coaching Tone']?.join(', ') || 'Default'}
 Vision of Success: ${f['Vision of Success'] || ''}
 `;
 
-    // STEP 3 – Coach Instructions
+    // STEP 3 – AI system prompt
     const systemPrompt = `
-You are the STRUKT Coach — a warm, smart, structured fitness and mindset AI.
+You are the STRUKT Coach — a warm, structured, intelligent fitness and lifestyle assistant.
 
-Use inclusive, supportive tone. Speak like a top-tier coach: clear, focused, practical, non-judgmental.
+Speak like a world-class coach: clear, kind, confident, and data-driven. Always be non-judgmental, inclusive, and motivational.
 
-Use emojis where helpful: 
-✅ confirmation, 💡 tips, 📊 insights, 💬 prompts, 🏋️ workouts, 🍽️ meals, 🧠 mindset, 🌙 sleep, 🔁 tracking.
-
-User Context:
+Use this user context:
 ${context}
 
-Give the best possible reply to this question:
-“${question}”
+Answer the question: "${question}"
 `;
 
     // STEP 4 – Ask OpenAI
@@ -72,7 +65,7 @@ Give the best possible reply to this question:
       {
         model: 'gpt-4',
         messages: [{ role: 'system', content: systemPrompt }],
-        temperature: 0.8,
+        temperature: 0.75,
       },
       {
         headers: {
@@ -83,18 +76,19 @@ Give the best possible reply to this question:
 
     const response = aiRes.data.choices[0]?.message?.content || 'No response generated.';
 
-    // STEP 5 – Log to Chat Interactions table
+    // STEP 5 – Log chat interaction
     try {
       await axios.post(
-        `https://api.airtable.com/v0/${AIRTABLE_BASE}/${INTERACTIONS_TABLE}`,
+        `https://api.airtable.com/v0/${AIRTABLE_BASE}/${CHAT_TABLE}`,
         {
           records: [
             {
               fields: {
-                User: [user.id], // Airtable record ID of the user
-                Topic: detectTopic(question),
-                Message: question,
-                'AI Response': response,
+                fldDtbxnE1PyTleqo: [user.id], // User (linked)
+                fld2eLzWRUnKNR7Im: detectTopic(question), // Topic
+                fldgNRKet3scJ8PIe: question, // Message
+                fld3vU9nKXNmu6OZV: response, // AI Response
+                fldcHOwNiQlFpwuly: `Chat – ${new Date().toLocaleString()}`, // Name
               },
             },
           ],
@@ -108,8 +102,14 @@ Give the best possible reply to this question:
       );
       console.log(`✅ Interaction logged for ${email}`);
     } catch (logErr) {
-      console.error('🔥 Airtable LOGGING ERROR:', logErr.response?.data || logErr.message);
+      console.error('🔥 Airtable LOGGING ERROR:', logErr?.response?.data || logErr.message);
     }
+
+    // (Optional) STEP 6 – Future: auto-log to Meals, Workouts, etc.
+    // Placeholder for now, ready to activate logging triggers below:
+    // await autoLogToMealsIfApplicable(question, user.id);
+    // await autoLogToWorkoutsIfApplicable(question, user.id);
+    // ... etc.
 
     res.json({ success: true, email, response });
   } catch (err) {
@@ -122,13 +122,15 @@ Give the best possible reply to this question:
   }
 });
 
-// Utility: Quick topic tagging
+// Topic detection for tagging
 function detectTopic(text) {
   const t = text.toLowerCase();
   if (t.includes('meal') || t.includes('calories') || t.includes('food')) return 'Nutrition';
   if (t.includes('workout') || t.includes('gym') || t.includes('exercise')) return 'Workout';
-  if (t.includes('motivation') || t.includes('mind') || t.includes('feel')) return 'Mindset';
-  if (t.includes('help') || t.includes('confused') || t.includes('don’t know')) return 'Support';
+  if (t.includes('sleep')) return 'Sleep';
+  if (t.includes('supplement') || t.includes('creatine') || t.includes('vitamin')) return 'Supplements';
+  if (t.includes('mood') || t.includes('emotion') || t.includes('feel')) return 'Mindset';
+  if (t.includes('reflect') || t.includes('review')) return 'Support';
   return 'Other';
 }
 
