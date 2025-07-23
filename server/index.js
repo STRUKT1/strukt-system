@@ -12,10 +12,10 @@ const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 
 // Airtable Table IDs
-const CHAT_TABLE_ID = "tblDtOOmahkMYEqmy";
-const MEALS_TABLE_ID = "tblWLkTKkxkSEcySD";
+const CHAT_TABLE_ID = "tblDtOOmahkMYEqmy";     // Chat Interactions
+const MEALS_TABLE_ID = "tblWLkTKkxkSEcySD";    // Meals
 
-// Airtable Field IDs for Chat Interactions
+// Field IDs for Chat Interactions
 const CHAT_FIELDS = {
   Name: "fldcHOwNiQlFpwuly",
   User: "fldDtbxnE1PyTleqo",
@@ -24,7 +24,7 @@ const CHAT_FIELDS = {
   Topic: "fld2eLzWRUnKNR7Im"
 };
 
-// Airtable Field IDs for Meals
+// Field IDs for Meals
 const MEAL_FIELDS = {
   User: "fldaTFIo8vKLoQYhS",
   Description: "fldLJXOsnTDqfp9mJ",
@@ -40,7 +40,7 @@ app.post("/log", async (req, res) => {
   const { email, topic, message, coachReply, logType, meal } = req.body;
 
   try {
-    // Fetch user record ID by email
+    // 🔍 1. Find the user by email
     const userRes = await axios.get(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Users`,
       {
@@ -55,12 +55,13 @@ app.post("/log", async (req, res) => {
 
     const userRecord = userRes.data.records[0];
     if (!userRecord) {
-      console.error("❌ No user found with email:", email);
+      console.error("❌ No user found for email:", email);
       return res.status(404).send("User not found");
     }
+
     const userId = userRecord.id;
 
-    // Log chat interaction
+    // 🧠 2. Log Chat Interaction
     await axios.post(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${CHAT_TABLE_ID}`,
       {
@@ -80,9 +81,9 @@ app.post("/log", async (req, res) => {
       }
     );
 
-    console.log(`✅ Interaction logged for ${email}`);
+    console.log(`✅ Chat interaction logged for ${email}`);
 
-    // Log meal if provided
+    // 🍽️ 3. Log Meal (if requested)
     if (logType === "meal" && meal) {
       await axios.post(
         `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${MEALS_TABLE_ID}`,
@@ -105,16 +106,22 @@ app.post("/log", async (req, res) => {
           }
         }
       );
+
       console.log(`✅ Meal logged for ${email}`);
     }
 
     res.status(200).send("Log successful");
   } catch (error) {
-    console.error("🔥 Logging error:", error.response?.data || error.message);
+    console.error("🔥 Logging error:");
+    if (error.response) {
+      console.error(error.response.data);
+    } else {
+      console.error(error.message);
+    }
     res.status(500).send("Logging failed");
   }
 });
 
 app.listen(port, () => {
-  console.log(`🚀 Server listening on port ${port}`);
+  console.log(`🚀 STRUKT Coach server running on port ${port}`);
 });
