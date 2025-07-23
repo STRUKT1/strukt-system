@@ -92,7 +92,6 @@ Give the best possible reply to this question:
             {
               fields: {
                 User: [user.id], // Airtable record ID of the user
-                'User Email': [f['Email Address']],
                 Topic: detectTopic(question),
                 Message: question,
                 'AI Response': response,
