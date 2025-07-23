@@ -18,7 +18,7 @@ app.post('/api/ask-coach', async (req, res) => {
   try {
     const AIRTABLE_BASE = process.env.AIRTABLE_BASE_ID;
     const USERS_TABLE = process.env.AIRTABLE_USER_TABLE_ID;
-    const CHAT_TABLE = 'tblDtOOmahkMYEqmy';
+    const INTERACTIONS_TABLE = 'tblDtOOmahkMYEqmy';
 
     // STEP 1 – Lookup Airtable user
     const userRes = await axios.get(
@@ -30,6 +30,7 @@ app.post('/api/ask-coach', async (req, res) => {
 
     const user = userRes.data.records?.[0];
     if (!user) throw new Error('❌ No user found');
+
     const f = user.fields;
 
     // STEP 2 – Build context
@@ -47,16 +48,20 @@ Preferred Tone: ${f['Preferred Coaching Tone']?.join(', ') || 'Default'}
 Vision of Success: ${f['Vision of Success'] || ''}
 `;
 
-    // STEP 3 – AI system prompt
+    // STEP 3 – Coach Instructions
     const systemPrompt = `
-You are the STRUKT Coach — a warm, structured, intelligent fitness and lifestyle assistant.
+You are the STRUKT Coach — a warm, smart, structured fitness and mindset AI.
 
-Speak like a world-class coach: clear, kind, confident, and data-driven. Always be non-judgmental, inclusive, and motivational.
+Use inclusive, supportive tone. Speak like a top-tier coach: clear, focused, practical, non-judgmental.
 
-Use this user context:
+Use emojis where helpful: 
+✅ confirmation, 💡 tips, 📊 insights, 💬 prompts, 🏋️ workouts, 🍽️ meals, 🧠 mindset, 🌙 sleep, 🔁 tracking.
+
+User Context:
 ${context}
 
-Answer the question: "${question}"
+Give the best possible reply to this question:
+“${question}”
 `;
 
     // STEP 4 – Ask OpenAI
@@ -65,7 +70,7 @@ Answer the question: "${question}"
       {
         model: 'gpt-4',
         messages: [{ role: 'system', content: systemPrompt }],
-        temperature: 0.75,
+        temperature: 0.8,
       },
       {
         headers: {
@@ -76,19 +81,19 @@ Answer the question: "${question}"
 
     const response = aiRes.data.choices[0]?.message?.content || 'No response generated.';
 
-    // STEP 5 – Log chat interaction
+    // STEP 5 – Log to Chat Interactions table
     try {
       await axios.post(
-        `https://api.airtable.com/v0/${AIRTABLE_BASE}/${CHAT_TABLE}`,
+        `https://api.airtable.com/v0/${AIRTABLE_BASE}/${INTERACTIONS_TABLE}`,
         {
           records: [
             {
               fields: {
-                fldDtbxnE1PyTleqo: [user.id], // User (linked)
-                fld2eLzWRUnKNR7Im: detectTopic(question), // Topic
-                fldgNRKet3scJ8PIe: question, // Message
-                fld3vU9nKXNmu6OZV: response, // AI Response
-                fldcHOwNiQlFpwuly: `Chat – ${new Date().toLocaleString()}`, // Name
+                "fldcHOwNiQlFpwuly": `Chat – ${new Date().toLocaleString()}`,
+                "fldDtbxnE1PyTleqo": [user.id],
+                "fld2eLzWRUnKNR7Im": detectTopic(question),
+                "fldgNRKet3scJ8PIe": question,
+                "fld3vU9nKXNmu6OZV": response
               },
             },
           ],
@@ -102,14 +107,42 @@ Answer the question: "${question}"
       );
       console.log(`✅ Interaction logged for ${email}`);
     } catch (logErr) {
-      console.error('🔥 Airtable LOGGING ERROR:', logErr?.response?.data || logErr.message);
+      console.error("🔥 Airtable LOGGING ERROR:", logErr.response?.data || logErr.message);
     }
 
-    // (Optional) STEP 6 – Future: auto-log to Meals, Workouts, etc.
-    // Placeholder for now, ready to activate logging triggers below:
-    // await autoLogToMealsIfApplicable(question, user.id);
-    // await autoLogToWorkoutsIfApplicable(question, user.id);
-    // ... etc.
+    // STEP 6 – Auto-log meal if relevant
+    try {
+      const msg = question.toLowerCase();
+      const isMeal = msg.includes('meal') || msg.includes('breakfast') || msg.includes('lunch') || msg.includes('dinner') || msg.includes('snack') || msg.includes('calories') || msg.includes('food');
+      
+      if (isMeal) {
+        await axios.post(
+          `https://api.airtable.com/v0/${AIRTABLE_BASE}/Meals`,
+          {
+            records: [
+              {
+                fields: {
+                  "fldWvzars92kZ6fZu": [user.id], // User
+                  "fld9KC4EDsgjsMAPa": new Date().toISOString().split('T')[0], // Date
+                  "fldmvAbVSaBGVNzqS": guessMealType(msg), // Meal Type
+                  "fldtWww1qbE9yJWte": question, // Description
+                  "flda7m7J31O2KqV2T": "AI-Generated" // Meal Source
+                }
+              }
+            ]
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            }
+          }
+        );
+        console.log(`✅ Meal logged for ${email}`);
+      }
+    } catch (mealErr) {
+      console.error("⚠️ Meal log failed:", mealErr.response?.data || mealErr.message);
+    }
 
     res.json({ success: true, email, response });
   } catch (err) {
@@ -122,16 +155,24 @@ Answer the question: "${question}"
   }
 });
 
-// Topic detection for tagging
+// Utility: Quick topic tagging
 function detectTopic(text) {
   const t = text.toLowerCase();
   if (t.includes('meal') || t.includes('calories') || t.includes('food')) return 'Nutrition';
   if (t.includes('workout') || t.includes('gym') || t.includes('exercise')) return 'Workout';
-  if (t.includes('sleep')) return 'Sleep';
-  if (t.includes('supplement') || t.includes('creatine') || t.includes('vitamin')) return 'Supplements';
-  if (t.includes('mood') || t.includes('emotion') || t.includes('feel')) return 'Mindset';
-  if (t.includes('reflect') || t.includes('review')) return 'Support';
+  if (t.includes('motivation') || t.includes('mind') || t.includes('feel')) return 'Mindset';
+  if (t.includes('help') || t.includes('confused') || t.includes('don’t know')) return 'Support';
   return 'Other';
+}
+
+// Utility: Guess meal type from message
+function guessMealType(text) {
+  text = text.toLowerCase();
+  if (text.includes("breakfast")) return "Breakfast";
+  if (text.includes("lunch")) return "Lunch";
+  if (text.includes("dinner")) return "Dinner";
+  if (text.includes("snack")) return "Snack";
+  return "Lunch";
 }
 
 app.listen(PORT, () => console.log(`🚀 STRUKT Server running on ${PORT}`));
