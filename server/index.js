@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.send('STRUKT Server is live 💪');
+  res.send('✅ STRUKT Server is live');
 });
 
 app.post('/api/ask-coach', async (req, res) => {
@@ -19,6 +19,7 @@ app.post('/api/ask-coach', async (req, res) => {
     const AIRTABLE_BASE = process.env.AIRTABLE_BASE_ID;
     const USERS_TABLE = process.env.AIRTABLE_USER_TABLE_ID;
     const INTERACTIONS_TABLE = 'tblDtOOmahkMYEqmy';
+    const MEALS_TABLE = process.env.AIRTABLE_MEALS_TABLE_ID;
 
     // STEP 1 – Lookup Airtable user
     const userRes = await axios.get(
@@ -33,34 +34,60 @@ app.post('/api/ask-coach', async (req, res) => {
 
     const f = user.fields;
 
-    // STEP 2 – Build context
+    // STEP 2 – Build user context
     const context = `
 Name: ${f['Full Name'] || 'Not set'}
 Pronouns: ${f['Pronouns'] || 'Not set'}
-Gender Identity: ${f['Gender Identity'] || 'Not set'}
 Main Goal(s): ${f['Main Goal']?.join(', ') || 'Not set'}
 Workout Preferences: ${f['Workout Preferences']?.join(', ') || 'Not set'}
-Equipment Access: ${f['Equipment Access'] || 'Not set'}
-Injuries / Limitations: ${f['Do you have any injuries or movement limitations we should be aware of?'] || 'None noted'}
 Nutrition Style: ${f['Current Nutrition Style']?.join(', ') || 'Not set'}
 Allergies: ${f['Allergies & Food Intolerances'] || 'None listed'}
-Preferred Tone: ${f['Preferred Coaching Tone']?.join(', ') || 'Default'}
-Vision of Success: ${f['Vision of Success'] || ''}
+Tone: ${f['Preferred Coaching Tone']?.join(', ') || 'Default'}
 `;
 
-    // STEP 3 – Coach Instructions
+    // STEP 3 – Create AI prompt with structured nutrition extraction
     const systemPrompt = `
-You are the STRUKT Coach — a warm, smart, structured fitness and mindset AI.
+You are the STRUKT Coach — a structured, inclusive, fitness and nutrition assistant.
 
-Use inclusive, supportive tone. Speak like a top-tier coach: clear, focused, practical, non-judgmental.
+Always reply clearly and respectfully, with helpful tone and emojis where useful.
 
-Use emojis where helpful: 
-✅ confirmation, 💡 tips, 📊 insights, 💬 prompts, 🏋️ workouts, 🍽️ meals, 🧠 mindset, 🌙 sleep, 🔁 tracking.
+If the question is about **logging a meal**, first extract the following:
+- Meal Type (Breakfast, Lunch, Dinner, Snack)
+- Description of the food
+- Calories
+- Protein (grams)
+- Carbs (grams)
+- Fats (grams)
+- Meal Source (Homemade, Branded, Restaurant, AI-Estimated)
 
-User Context:
+If not all values are provided, use AI estimation.
+
+REPLY TO THE USER:
+
+1. ✅ Friendly confirmation of what was logged  
+2. 📊 Nutritional estimate (bullet points)  
+3. 🔁 Invite to log more or ask a question  
+
+ALSO RETURN THIS JSON AFTER YOUR MESSAGE:
+\`\`\`json
+{
+  "logType": "meal",
+  "meal": {
+    "mealType": "Snack",
+    "description": "Misfits protein bar",
+    "calories": 180,
+    "protein": 15,
+    "carbs": 16,
+    "fats": 7,
+    "mealSource": "AI-Estimated"
+  }
+}
+\`\`\`
+
+User info:
 ${context}
 
-Give the best possible reply to this question:
+User input:
 “${question}”
 `;
 
@@ -70,7 +97,7 @@ Give the best possible reply to this question:
       {
         model: 'gpt-4',
         messages: [{ role: 'system', content: systemPrompt }],
-        temperature: 0.8,
+        temperature: 0.7,
       },
       {
         headers: {
@@ -79,9 +106,24 @@ Give the best possible reply to this question:
       }
     );
 
-    const response = aiRes.data.choices[0]?.message?.content || 'No response generated.';
+    const responseRaw = aiRes.data.choices[0]?.message?.content || 'No response generated.';
 
-    // STEP 5 – Log to Chat Interactions table
+    // Extract JSON block if present
+    const jsonMatch = responseRaw.match(/```json([\s\S]*?)```/);
+    let mealData = null;
+
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1].trim());
+        if (parsed.logType === 'meal' && parsed.meal) {
+          mealData = parsed.meal;
+        }
+      } catch (e) {
+        console.warn('⚠️ Failed to parse meal JSON block');
+      }
+    }
+
+    // STEP 5 – Log to Chat Interactions
     try {
       await axios.post(
         `https://api.airtable.com/v0/${AIRTABLE_BASE}/${INTERACTIONS_TABLE}`,
@@ -89,11 +131,11 @@ Give the best possible reply to this question:
           records: [
             {
               fields: {
-                "fldcHOwNiQlFpwuly": `Chat – ${new Date().toLocaleString()}`,
-                "fldDtbxnE1PyTleqo": [user.id],
-                "fld2eLzWRUnKNR7Im": detectTopic(question),
-                "fldgNRKet3scJ8PIe": question,
-                "fld3vU9nKXNmu6OZV": response
+                fldDtbxnE1PyTleqo: [user.id], // User
+                fld2eLzWRUnKNR7Im: detectTopic(question), // Topic
+                fldgNRKet3scJ8PIe: question, // Message
+                fld3vU9nKXNmu6OZV: responseRaw, // AI Response
+                fldcHOwNiQlFpwuly: `Chat – ${new Date().toLocaleString()}`, // Name
               },
             },
           ],
@@ -107,72 +149,65 @@ Give the best possible reply to this question:
       );
       console.log(`✅ Interaction logged for ${email}`);
     } catch (logErr) {
-      console.error("🔥 Airtable LOGGING ERROR:", logErr.response?.data || logErr.message);
+      console.error('🔥 Airtable interaction logging error:', logErr?.response?.data || logErr.message);
     }
 
-    // STEP 6 – Auto-log meal if relevant
-    try {
-      const msg = question.toLowerCase();
-      const isMeal = msg.includes('meal') || msg.includes('breakfast') || msg.includes('lunch') || msg.includes('dinner') || msg.includes('snack') || msg.includes('calories') || msg.includes('food');
-      
-      if (isMeal) {
+    // STEP 6 – If meal detected, log it
+    if (mealData) {
+      try {
         await axios.post(
-          `https://api.airtable.com/v0/${AIRTABLE_BASE}/Meals`,
+          `https://api.airtable.com/v0/${AIRTABLE_BASE}/${MEALS_TABLE}`,
           {
             records: [
               {
                 fields: {
-                  "fldWvzars92kZ6fZu": [user.id], // User
-                  "fld9KC4EDsgjsMAPa": new Date().toISOString().split('T')[0], // Date
-                  "fldmvAbVSaBGVNzqS": guessMealType(msg), // Meal Type
-                  "fldtWww1qbE9yJWte": question, // Description
-                  "flda7m7J31O2KqV2T": "AI-Generated" // Meal Source
-                }
-              }
-            ]
+                  fldWvzars92kZ6fZu: [user.id], // User
+                  fld9KC4EDsgjsMAPa: new Date().toISOString().split('T')[0], // Date
+                  fldmvAbVSaBGVNzqS: mealData.mealType, // Meal Type
+                  fldtWww1qbE9yJWte: mealData.description, // Description
+                  fldQXr3rOcMaBYjOC: mealData.calories, // Calories
+                  fldhts0NWA2ekG60o: mealData.protein, // Protein
+                  fldOZFMZG8tekyglr: mealData.carbs, // Carbs
+                  fldtH1QNiyM8ZaX4V: mealData.fats, // Fats
+                  flda7m7J31O2KqV2T: mealData.mealSource, // Meal Source
+                },
+              },
+            ],
           },
           {
             headers: {
               Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
               'Content-Type': 'application/json',
-            }
+            },
           }
         );
         console.log(`✅ Meal logged for ${email}`);
+      } catch (mealErr) {
+        console.error('🔥 Airtable meal logging error:', mealErr?.response?.data || mealErr.message);
       }
-    } catch (mealErr) {
-      console.error("⚠️ Meal log failed:", mealErr.response?.data || mealErr.message);
     }
 
-    res.json({ success: true, email, response });
+    // Respond to frontend
+    res.json({ success: true, email, response: responseRaw });
   } catch (err) {
-    console.error('🔥 ERROR:', err.message);
+    console.error('🔥 Main error:', err.message);
     res.json({
       success: false,
       email,
-      response: 'Sorry, something went wrong. Please try again later.',
+      response: 'Something went wrong. Please try again shortly.',
     });
   }
 });
 
-// Utility: Quick topic tagging
+// Topic detection
 function detectTopic(text) {
   const t = text.toLowerCase();
   if (t.includes('meal') || t.includes('calories') || t.includes('food')) return 'Nutrition';
-  if (t.includes('workout') || t.includes('gym') || t.includes('exercise')) return 'Workout';
-  if (t.includes('motivation') || t.includes('mind') || t.includes('feel')) return 'Mindset';
-  if (t.includes('help') || t.includes('confused') || t.includes('don’t know')) return 'Support';
+  if (t.includes('workout') || t.includes('gym')) return 'Workout';
+  if (t.includes('sleep')) return 'Sleep';
+  if (t.includes('mood') || t.includes('feeling')) return 'Mindset';
+  if (t.includes('help') || t.includes('confused')) return 'Support';
   return 'Other';
 }
 
-// Utility: Guess meal type from message
-function guessMealType(text) {
-  text = text.toLowerCase();
-  if (text.includes("breakfast")) return "Breakfast";
-  if (text.includes("lunch")) return "Lunch";
-  if (text.includes("dinner")) return "Dinner";
-  if (text.includes("snack")) return "Snack";
-  return "Lunch";
-}
-
-app.listen(PORT, () => console.log(`🚀 STRUKT Server running on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 STRUKT server running on port ${PORT}`));
