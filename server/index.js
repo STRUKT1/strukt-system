@@ -1,73 +1,106 @@
-The id for Chat Interactions is tblDtOOmahkMYEqmy. Table ids and table names can be used interchangeably in API requests. Using table ids means table name changes do not require modifications to your API request.
+const express = require("express");
+const axios = require("axios");
+const router = express.Router();
+require("dotenv").config();
 
-Fields
-Each record in the Chat Interactions table contains the following fields:
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
+const BASE_ID = process.env.AIRTABLE_BASE_ID;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const CHAT_INTERACTIONS_TABLE_ID = "tblDtOOmahkMYEqmy";
 
-Field names and field ids can be used interchangeably. Using field ids means field name changes do not require modifications to your API request. We recommend using field ids over field names where possible, to reduce modifications to your API request if the user changes the field name later.
+const AIRTABLE_HEADERS = {
+  Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+  "Content-Type": "application/json",
+};
 
-FIELD NAMEFIELD IDTYPEDESCRIPTION
-Name fldcHOwNiQlFpwuly Text
-string
-A single line of text.
- 
-EXAMPLE VALUES
-"Chat – 7/22/2025, 10:14:12 PM"
-Notes fldDyieb8C10ht8oP
-Link to another record
-array of record IDs (strings)
-Array of linked records IDs from the User table.
- 
-EXAMPLE VALUE
-["rec8116cdd76088af", "rec245db9343f55e8", "rec4f3bade67ff565"]
-User fldDtbxnE1PyTleqo
-Link to another record
-array of record IDs (strings)
-Array of linked records IDs from the User table.
- 
-EXAMPLE VALUE
-["rec8116cdd76088af", "rec245db9343f55e8", "rec4f3bade67ff565"]
-User Email fldkDFXOrqWv8t9Sx
-Lookup
-array of numbers, strings, booleans, or objects
-Array of Email Address fields in linked User records.
- 
-EXAMPLE VALUES
-[
-    "theresebwd@yahoo.co.uk"
-]
-Date/Time fld1WNv8Oj0PU0ODt Created time
-string
-The time the record was created in UTC, e.g. "2015-08-29T07:00:00.000Z".
- 
-EXAMPLE VALUES
-"2025-07-22T22:14:13.000Z"
-Topic fld2eLzWRUnKNR7Im
-Single select
-string
-Selected option name.
+// Function to get user record ID by email
+async function getUserRecordId(email) {
+  try {
+    const response = await axios.get(
+      `https://api.airtable.com/v0/${BASE_ID}/Users?filterByFormula={Email Address}='${email}'`,
+      { headers: AIRTABLE_HEADERS }
+    );
 
-When creating or updating records, if the choice string does not exactly match an existing option, the request will fail with an INVALID_MULTIPLE_CHOICE_OPTIONS error unless the typecast parameter is enabled. If typecast is enabled, a new choice will be created if one does not exactly match.
+    const records = response.data.records;
+    if (records.length > 0) {
+      return records[0].id;
+    } else {
+      console.warn("❌ No matching user found in Airtable for email:", email);
+      return null;
+    }
+  } catch (error) {
+    console.error("❌ Error fetching user from Airtable:", error.message);
+    return null;
+  }
+}
 
- 
-POSSIBLE VALUES
-[
-    "Nutrition",
-    "Workout",
-    "Mindset",
-    "Support",
-    "Other"
-]
-Message fldgNRKet3scJ8PIe Long text
-string
-Multiple lines of text, which may contain "mention tokens", e.g.
-<airtable:mention id="menE1i9oBaGX3DseR">@Alex</airtable:mention>
- 
-EXAMPLE VALUES
-"I am going to pret for my lunch at work tomorrow. Based on my goals what should I look to get for lunch?"
-AI Response fld3vU9nKXNmu6OZV Long text
-string
-Multiple lines of text, which may contain "mention tokens", e.g.
-<airtable:mention id="menE1i9oBaGX3DseR">@Alex</airtable:mention>
- 
-EXAMPLE VALUES
-"Hey Therese, \n\nThat's great! Planning your meals ahead of time is an excellent way to support your fitness goals. 🎯 \n\nHere's a guide on what you migh..."
+// Log chat interaction to Airtable
+async function logChatInteraction({ email, userRecordId, topic = "Other", message, aiResponse }) {
+  try {
+    const now = new Date();
+    const name = `Chat – ${now.toLocaleString("en-GB", { timeZone: "Europe/London" })}`;
+
+    const payload = {
+      records: [
+        {
+          fields: {
+            Name: name,
+            User: [userRecordId],
+            Topic: topic,
+            Message: message,
+            "AI Response": aiResponse,
+          },
+        },
+      ],
+    };
+
+    await axios.post(
+      `https://api.airtable.com/v0/${BASE_ID}/${CHAT_INTERACTIONS_TABLE_ID}`,
+      payload,
+      { headers: AIRTABLE_HEADERS }
+    );
+
+    console.log("✅ Chat interaction logged to Airtable");
+  } catch (error) {
+    console.error("⚠️ Could not log chat interaction:", error.message);
+  }
+}
+
+// Placeholder function for asking OpenAI (replace with actual logic)
+async function askOpenAI(message, userContext) {
+  // This is a placeholder - replace with actual OpenAI call and context
+  return `Echo: ${message}`;
+}
+
+// Main route for the AI coach
+router.post("/api/ask-coach", async (req, res) => {
+  const { email, question } = req.body;
+  if (!email || !question) {
+    return res.status(400).json({ error: "Missing email or question" });
+  }
+
+  try {
+    const userRecordId = await getUserRecordId(email);
+    if (!userRecordId) {
+      return res.status(404).json({ error: "User not found in Airtable" });
+    }
+
+    const aiResponse = await askOpenAI(question, { email, userRecordId });
+
+    // Log chat interaction
+    await logChatInteraction({
+      email,
+      userRecordId,
+      topic: "Nutrition", // Change logic later if dynamic
+      message: question,
+      aiResponse: aiResponse,
+    });
+
+    return res.json({ response: aiResponse });
+  } catch (error) {
+    console.error("❌ AI Coach error:", error.message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+module.exports = router;
