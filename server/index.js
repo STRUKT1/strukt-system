@@ -8,27 +8,23 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Test route
 app.get('/', (req, res) => {
-  res.send('🚀 STRUKT Server is live');
+  res.send('STRUKT Server is live 💪');
 });
 
 app.post('/api/ask-coach', async (req, res) => {
   const { email, question } = req.body;
 
   try {
-    // ENV vars
     const AIRTABLE_BASE = process.env.AIRTABLE_BASE_ID;
     const USERS_TABLE = process.env.AIRTABLE_USER_TABLE_ID;
-    const CHAT_TABLE = 'tblDtOOmahkMYEqmy';
+    const CHAT_TABLE = process.env.AIRTABLE_CHAT_TABLE_ID;
 
-    // Step 1 – Look up user
+    // STEP 1 – Lookup user from Airtable
     const userRes = await axios.get(
       `https://api.airtable.com/v0/${AIRTABLE_BASE}/${USERS_TABLE}?filterByFormula={Email Address}='${email}'`,
       {
-        headers: {
-          Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
-        },
+        headers: { Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}` },
       }
     );
 
@@ -37,7 +33,7 @@ app.post('/api/ask-coach', async (req, res) => {
 
     const f = user.fields;
 
-    // Step 2 – Build prompt
+    // STEP 2 – Build coaching context
     const context = `
 Name: ${f['Full Name'] || 'Not set'}
 Pronouns: ${f['Pronouns'] || 'Not set'}
@@ -52,6 +48,7 @@ Preferred Tone: ${f['Preferred Coaching Tone']?.join(', ') || 'Default'}
 Vision of Success: ${f['Vision of Success'] || ''}
 `;
 
+    // STEP 3 – Prompt for the AI coach
     const systemPrompt = `
 You are the STRUKT Coach — a warm, smart, structured fitness and mindset AI.
 
@@ -67,7 +64,7 @@ Give the best possible reply to this question:
 “${question}”
 `;
 
-    // Step 3 – Get OpenAI response
+    // STEP 4 – Ask OpenAI
     const aiRes = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
@@ -82,9 +79,9 @@ Give the best possible reply to this question:
       }
     );
 
-    const reply = aiRes.data.choices?.[0]?.message?.content || 'No reply generated.';
+    const reply = aiRes.data.choices[0]?.message?.content || 'No response generated.';
 
-    // Step 4 – Log interaction to Airtable using field IDs
+    // STEP 5 – Log chat interaction to Airtable (using field NAMES for compatibility)
     try {
       await axios.post(
         `https://api.airtable.com/v0/${AIRTABLE_BASE}/${CHAT_TABLE}`,
@@ -92,12 +89,12 @@ Give the best possible reply to this question:
           records: [
             {
               fields: {
-                fldcHOwNiQlFpwuly: `Chat – ${new Date().toLocaleString()}`, // Name
-                fldDtbxnE1PyTleqo: [user.id], // User
-                fldkDFXOrqWv8t9Sx: [f['Email Address']], // User Email
-                fld2eLzWRUnKNR7Im: detectTopic(question), // Topic
-                fldgNRKet3scJ8PIe: question, // Message
-                fld3vU9nKXNmu6OZV: reply, // AI Response
+                Name: `Chat – ${new Date().toLocaleString()}`,
+                User: [user.id],
+                'User Email': [f['Email Address']],
+                Topic: detectTopic(question),
+                Message: question,
+                'AI Response': reply,
               },
             },
           ],
@@ -109,12 +106,12 @@ Give the best possible reply to this question:
           },
         }
       );
-      console.log(`✅ Chat interaction logged for ${email}`);
-    } catch (err) {
-      console.error('⚠️ Could not log chat interaction:', err.message);
+
+      console.log(`✅ Interaction logged for ${email}`);
+    } catch (logErr) {
+      console.error('⚠️ Could not log chat interaction:', logErr.message);
     }
 
-    // Step 5 – Return response to frontend
     res.json({ success: true, email, response: reply });
   } catch (err) {
     console.error('🔥 ERROR:', err.message);
@@ -126,7 +123,7 @@ Give the best possible reply to this question:
   }
 });
 
-// Utility: topic detection
+// Utility: detect topic
 function detectTopic(text) {
   const t = text.toLowerCase();
   if (t.includes('meal') || t.includes('calories') || t.includes('food')) return 'Nutrition';
@@ -136,4 +133,4 @@ function detectTopic(text) {
   return 'Other';
 }
 
-app.listen(PORT, () => console.log(`🧠 STRUKT Coach API running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 STRUKT Server running on port ${PORT}`));
