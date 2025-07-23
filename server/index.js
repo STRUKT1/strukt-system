@@ -62,6 +62,11 @@ ${context}
 
 Give the best possible reply to this question:
 “${question}”
+
+At the end of your reply, include:
+
+— **STRUKT Coach 🤖**  
+_(powered by you, structured by science)_
 `;
 
     // STEP 4 – Ask OpenAI
@@ -81,7 +86,7 @@ Give the best possible reply to this question:
 
     const response = aiRes.data.choices[0]?.message?.content || 'No response generated.';
 
-    // STEP 5 – Try logging to Chat Interactions
+    // STEP 5 – Log to Chat Interactions table
     try {
       await axios.post(
         `https://api.airtable.com/v0/${AIRTABLE_BASE}/${INTERACTIONS_TABLE}`,
