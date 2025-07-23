@@ -18,17 +18,15 @@ app.post('/api/ask-coach', async (req, res) => {
   try {
     const AIRTABLE_BASE = process.env.AIRTABLE_BASE_ID;
     const USERS_TABLE = process.env.AIRTABLE_USER_TABLE_ID;
-
-    // Table IDs
     const INTERACTIONS_TABLE = 'tblDtOOmahkMYEqmy';
-    const MEALS_TABLE = 'tblkYvKY9ZcmzpYh8';
-    const WORKOUTS_TABLE = 'tbl0p3sNf6Fc2iGkM';
-    const SUPPLEMENTS_TABLE = 'tblMiBUPYbIYZU3he';
-    const SLEEP_TABLE = 'tblOWX9q9jBRWve2j';
-    const MOOD_TABLE = 'tblFrNgZZIgsd0ZoC';
-    const REFLECTIONS_TABLE = 'tblswZwN7rc66Tbpw';
 
-    // STEP 1 – Lookup Airtable user
+    const MEALS_TABLE = 'tblDqdqBixZ7X1W6f';
+    const WORKOUTS_TABLE = 'tbljLbzmP1bHf4DOL';
+    const SUPPLEMENTS_TABLE = 'tbl89kPJUc1IMg9Yu';
+    const SLEEP_TABLE = 'tblLfajkFi6exqZxU';
+    const MOOD_TABLE = 'tblsRLFVJLy3JjSZX';
+    const REFLECTIONS_TABLE = 'tbl0YHy7ZLLkIBK6J';
+
     const userRes = await axios.get(
       `https://api.airtable.com/v0/${AIRTABLE_BASE}/${USERS_TABLE}?filterByFormula={Email Address}='${email}'`,
       {
@@ -40,9 +38,7 @@ app.post('/api/ask-coach', async (req, res) => {
     if (!user) throw new Error('❌ No user found');
 
     const f = user.fields;
-    const userId = user.id;
 
-    // STEP 2 – Build context
     const context = `
 Name: ${f['Full Name'] || 'Not set'}
 Pronouns: ${f['Pronouns'] || 'Not set'}
@@ -57,7 +53,6 @@ Preferred Tone: ${f['Preferred Coaching Tone']?.join(', ') || 'Default'}
 Vision of Success: ${f['Vision of Success'] || ''}
 `;
 
-    // STEP 3 – Coach Instructions
     const systemPrompt = `
 You are the STRUKT Coach — a warm, smart, structured fitness and mindset AI.
 
@@ -73,7 +68,6 @@ Give the best possible reply to this question:
 “${question}”
 `;
 
-    // STEP 4 – Ask OpenAI
     const aiRes = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
@@ -90,7 +84,7 @@ Give the best possible reply to this question:
 
     const response = aiRes.data.choices[0]?.message?.content || 'No response generated.';
 
-    // STEP 5 – Log to Chat Interactions
+    // Step 1: Log interaction
     try {
       await axios.post(
         `https://api.airtable.com/v0/${AIRTABLE_BASE}/${INTERACTIONS_TABLE}`,
@@ -99,7 +93,7 @@ Give the best possible reply to this question:
             {
               fields: {
                 Name: `Chat – ${new Date().toLocaleString()}`,
-                User: [userId],
+                User: [user.id],
                 'User Email': [f['Email Address']],
                 Topic: detectTopic(question),
                 Message: question,
@@ -115,43 +109,38 @@ Give the best possible reply to this question:
           },
         }
       );
+      console.log(`✅ Chat logged for ${email}`);
     } catch (err) {
-      console.error('⚠️ Could not log chat interaction:', err.message);
+      console.warn('⚠️ Could not log chat interaction:', err.message);
     }
 
-    // STEP 6 – Try Auto Logging
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const autoLogPayload = {
-        records: [
-          {
-            fields: {
-              Name: question,
-              User: [userId],
-              'User Email': [f['Email Address']],
-              Date: today,
-              Description: response,
-              Notes: response,
-            },
-          },
-        ],
-      };
+    // Step 2: Auto-log to other tables
+    const tasks = [
+      { table: MEALS_TABLE, topic: 'Nutrition' },
+      { table: WORKOUTS_TABLE, topic: 'Workout' },
+      { table: SUPPLEMENTS_TABLE, topic: 'Supplement' },
+      { table: SLEEP_TABLE, topic: 'Sleep' },
+      { table: MOOD_TABLE, topic: 'Mood' },
+      { table: REFLECTIONS_TABLE, topic: 'Reflection' },
+    ];
 
-      const logTable = detectLogTable(question);
-      const tableMap = {
-        Meal: MEALS_TABLE,
-        Workout: WORKOUTS_TABLE,
-        Supplement: SUPPLEMENTS_TABLE,
-        Sleep: SLEEP_TABLE,
-        Mood: MOOD_TABLE,
-        Reflection: REFLECTIONS_TABLE,
-      };
-
-      const tableId = tableMap[logTable];
-      if (tableId) {
+    const matched = tasks.find(t => detectTopic(question) === t.topic);
+    if (matched) {
+      try {
         await axios.post(
-          `https://api.airtable.com/v0/${AIRTABLE_BASE}/${tableId}`,
-          autoLogPayload,
+          `https://api.airtable.com/v0/${AIRTABLE_BASE}/${matched.table}`,
+          {
+            records: [
+              {
+                fields: {
+                  Name: `AI Log – ${new Date().toLocaleString()}`,
+                  User: [user.id],
+                  'User Email': [f['Email Address']],
+                  Notes: response,
+                },
+              },
+            ],
+          },
           {
             headers: {
               Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
@@ -159,10 +148,10 @@ Give the best possible reply to this question:
             },
           }
         );
-        console.log(`✅ Auto-logged to ${logTable} table`);
+        console.log(`✅ Auto-logged to ${matched.topic} for ${email}`);
+      } catch (logErr) {
+        console.warn('⚠️ Auto-log failed:', logErr.message);
       }
-    } catch (err) {
-      console.error('⚠️ Auto-log failed:', err.message);
     }
 
     res.json({ success: true, email, response });
@@ -176,26 +165,15 @@ Give the best possible reply to this question:
   }
 });
 
-// Utility – Topic tagging
 function detectTopic(text) {
   const t = text.toLowerCase();
   if (t.includes('meal') || t.includes('calories') || t.includes('food')) return 'Nutrition';
   if (t.includes('workout') || t.includes('gym') || t.includes('exercise')) return 'Workout';
-  if (t.includes('motivation') || t.includes('mind') || t.includes('feel')) return 'Mindset';
-  if (t.includes('help') || t.includes('confused') || t.includes('don’t know')) return 'Support';
+  if (t.includes('supplement') || t.includes('vitamin')) return 'Supplement';
+  if (t.includes('sleep') || t.includes('bed') || t.includes('rest')) return 'Sleep';
+  if (t.includes('mood') || t.includes('feel') || t.includes('emotion')) return 'Mood';
+  if (t.includes('reflect') || t.includes('journal') || t.includes('review')) return 'Reflection';
   return 'Other';
-}
-
-// Utility – Logging category routing
-function detectLogTable(text) {
-  const t = text.toLowerCase();
-  if (t.includes('meal') || t.includes('breakfast') || t.includes('lunch') || t.includes('dinner')) return 'Meal';
-  if (t.includes('gym') || t.includes('workout') || t.includes('exercise')) return 'Workout';
-  if (t.includes('creatine') || t.includes('vitamin') || t.includes('supplement')) return 'Supplement';
-  if (t.includes('sleep') || t.includes('bed') || t.includes('wake')) return 'Sleep';
-  if (t.includes('mood') || t.includes('energy') || t.includes('feeling')) return 'Mood';
-  if (t.includes('reflection') || t.includes('review') || t.includes('check-in')) return 'Reflection';
-  return null;
 }
 
 app.listen(PORT, () => console.log(`🚀 STRUKT Server running on ${PORT}`));
