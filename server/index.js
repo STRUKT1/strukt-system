@@ -1,106 +1,139 @@
-const express = require("express");
-const axios = require("axios");
-const router = express.Router();
-require("dotenv").config();
+import express from 'express';
+import cors from 'cors';
+import axios from 'axios';
 
-const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const BASE_ID = process.env.AIRTABLE_BASE_ID;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const CHAT_INTERACTIONS_TABLE_ID = "tblDtOOmahkMYEqmy";
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-const AIRTABLE_HEADERS = {
-  Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-  "Content-Type": "application/json",
-};
+app.use(cors());
+app.use(express.json());
 
-// Function to get user record ID by email
-async function getUserRecordId(email) {
-  try {
-    const response = await axios.get(
-      `https://api.airtable.com/v0/${BASE_ID}/Users?filterByFormula={Email Address}='${email}'`,
-      { headers: AIRTABLE_HEADERS }
-    );
+// Test route
+app.get('/', (req, res) => {
+  res.send('🚀 STRUKT Server is live');
+});
 
-    const records = response.data.records;
-    if (records.length > 0) {
-      return records[0].id;
-    } else {
-      console.warn("❌ No matching user found in Airtable for email:", email);
-      return null;
-    }
-  } catch (error) {
-    console.error("❌ Error fetching user from Airtable:", error.message);
-    return null;
-  }
-}
-
-// Log chat interaction to Airtable
-async function logChatInteraction({ email, userRecordId, topic = "Other", message, aiResponse }) {
-  try {
-    const now = new Date();
-    const name = `Chat – ${now.toLocaleString("en-GB", { timeZone: "Europe/London" })}`;
-
-    const payload = {
-      records: [
-        {
-          fields: {
-            Name: name,
-            User: [userRecordId],
-            Topic: topic,
-            Message: message,
-            "AI Response": aiResponse,
-          },
-        },
-      ],
-    };
-
-    await axios.post(
-      `https://api.airtable.com/v0/${BASE_ID}/${CHAT_INTERACTIONS_TABLE_ID}`,
-      payload,
-      { headers: AIRTABLE_HEADERS }
-    );
-
-    console.log("✅ Chat interaction logged to Airtable");
-  } catch (error) {
-    console.error("⚠️ Could not log chat interaction:", error.message);
-  }
-}
-
-// Placeholder function for asking OpenAI (replace with actual logic)
-async function askOpenAI(message, userContext) {
-  // This is a placeholder - replace with actual OpenAI call and context
-  return `Echo: ${message}`;
-}
-
-// Main route for the AI coach
-router.post("/api/ask-coach", async (req, res) => {
+app.post('/api/ask-coach', async (req, res) => {
   const { email, question } = req.body;
-  if (!email || !question) {
-    return res.status(400).json({ error: "Missing email or question" });
-  }
 
   try {
-    const userRecordId = await getUserRecordId(email);
-    if (!userRecordId) {
-      return res.status(404).json({ error: "User not found in Airtable" });
+    // ENV vars
+    const AIRTABLE_BASE = process.env.AIRTABLE_BASE_ID;
+    const USERS_TABLE = process.env.AIRTABLE_USER_TABLE_ID;
+    const CHAT_TABLE = 'tblDtOOmahkMYEqmy';
+
+    // Step 1 – Look up user
+    const userRes = await axios.get(
+      `https://api.airtable.com/v0/${AIRTABLE_BASE}/${USERS_TABLE}?filterByFormula={Email Address}='${email}'`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
+        },
+      }
+    );
+
+    const user = userRes.data.records?.[0];
+    if (!user) throw new Error('❌ No user found');
+
+    const f = user.fields;
+
+    // Step 2 – Build prompt
+    const context = `
+Name: ${f['Full Name'] || 'Not set'}
+Pronouns: ${f['Pronouns'] || 'Not set'}
+Gender Identity: ${f['Gender Identity'] || 'Not set'}
+Main Goal(s): ${f['Main Goal']?.join(', ') || 'Not set'}
+Workout Preferences: ${f['Workout Preferences']?.join(', ') || 'Not set'}
+Equipment Access: ${f['Equipment Access'] || 'Not set'}
+Injuries / Limitations: ${f['Do you have any injuries or movement limitations we should be aware of?'] || 'None noted'}
+Nutrition Style: ${f['Current Nutrition Style']?.join(', ') || 'Not set'}
+Allergies: ${f['Allergies & Food Intolerances'] || 'None listed'}
+Preferred Tone: ${f['Preferred Coaching Tone']?.join(', ') || 'Default'}
+Vision of Success: ${f['Vision of Success'] || ''}
+`;
+
+    const systemPrompt = `
+You are the STRUKT Coach — a warm, smart, structured fitness and mindset AI.
+
+Use inclusive, supportive tone. Speak like a top-tier coach: clear, focused, practical, non-judgmental.
+
+Use emojis where helpful: 
+✅ confirmation, 💡 tips, 📊 insights, 💬 prompts, 🏋️ workouts, 🍽️ meals, 🧠 mindset, 🌙 sleep, 🔁 tracking.
+
+User Context:
+${context}
+
+Give the best possible reply to this question:
+“${question}”
+`;
+
+    // Step 3 – Get OpenAI response
+    const aiRes = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4',
+        messages: [{ role: 'system', content: systemPrompt }],
+        temperature: 0.8,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+      }
+    );
+
+    const reply = aiRes.data.choices?.[0]?.message?.content || 'No reply generated.';
+
+    // Step 4 – Log interaction to Airtable using field IDs
+    try {
+      await axios.post(
+        `https://api.airtable.com/v0/${AIRTABLE_BASE}/${CHAT_TABLE}`,
+        {
+          records: [
+            {
+              fields: {
+                fldcHOwNiQlFpwuly: `Chat – ${new Date().toLocaleString()}`, // Name
+                fldDtbxnE1PyTleqo: [user.id], // User
+                fldkDFXOrqWv8t9Sx: [f['Email Address']], // User Email
+                fld2eLzWRUnKNR7Im: detectTopic(question), // Topic
+                fldgNRKet3scJ8PIe: question, // Message
+                fld3vU9nKXNmu6OZV: reply, // AI Response
+              },
+            },
+          ],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      console.log(`✅ Chat interaction logged for ${email}`);
+    } catch (err) {
+      console.error('⚠️ Could not log chat interaction:', err.message);
     }
 
-    const aiResponse = await askOpenAI(question, { email, userRecordId });
-
-    // Log chat interaction
-    await logChatInteraction({
+    // Step 5 – Return response to frontend
+    res.json({ success: true, email, response: reply });
+  } catch (err) {
+    console.error('🔥 ERROR:', err.message);
+    res.json({
+      success: false,
       email,
-      userRecordId,
-      topic: "Nutrition", // Change logic later if dynamic
-      message: question,
-      aiResponse: aiResponse,
+      response: 'Sorry, something went wrong. Please try again later.',
     });
-
-    return res.json({ response: aiResponse });
-  } catch (error) {
-    console.error("❌ AI Coach error:", error.message);
-    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-module.exports = router;
+// Utility: topic detection
+function detectTopic(text) {
+  const t = text.toLowerCase();
+  if (t.includes('meal') || t.includes('calories') || t.includes('food')) return 'Nutrition';
+  if (t.includes('workout') || t.includes('gym') || t.includes('exercise')) return 'Workout';
+  if (t.includes('motivation') || t.includes('mind') || t.includes('feel')) return 'Mindset';
+  if (t.includes('help') || t.includes('confused') || t.includes('don’t know')) return 'Support';
+  return 'Other';
+}
+
+app.listen(PORT, () => console.log(`🧠 STRUKT Coach API running on port ${PORT}`));
