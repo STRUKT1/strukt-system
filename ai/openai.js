@@ -5,9 +5,8 @@ const path = require("path");
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_ORG_ID = process.env.OPENAI_ORG_ID;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-
-const VISION_MODEL = "gpt-4-vision-preview"; // reserved for future image input
-const CHAT_MODEL = "gpt-4o"; // ✅ confirmed available to your key
+const VISION_MODEL = "gpt-4-vision-preview"; // For future image input
+const CHAT_MODEL = "gpt-4o"; // Confirmed supported
 
 // ✅ Load the STRUKT system prompt
 const systemPrompt = fs.readFileSync(
@@ -24,16 +23,13 @@ const systemPrompt = fs.readFileSync(
  */
 async function getAIReply(userMessage, context = {}, imageBase64 = null) {
   try {
-    // 👤 Construct identity-aware pre-prompt (optional)
     const contextString = buildContextString(context);
 
-    // 🧠 Build the core message array
     const messages = [
       { role: "system", content: `${systemPrompt}${contextString}` },
       { role: "user", content: userMessage }
     ];
 
-    // 📷 Optional image input (for future use)
     const payload = imageBase64
       ? {
           model: VISION_MODEL,
@@ -56,17 +52,17 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
           max_tokens: 1000
         }
       : {
-          model: CHAT_MODEL, // ✅ using gpt-4o
+          model: CHAT_MODEL,
           messages,
           temperature: 0.7
         };
 
-    // 🚀 Send request to OpenAI
+    // ✅ Include org ID in headers
     const res = await axios.post(OPENAI_URL, payload, {
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
-        "OpenAI-Organization": OPENAI_ORG_ID // ✅ ✅ ✅ ADD THIS LINE
+        "OpenAI-Organization": OPENAI_ORG_ID
       }
     });
 
