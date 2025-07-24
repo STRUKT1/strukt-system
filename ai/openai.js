@@ -79,9 +79,12 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
     const reply = res.data.choices[0].message.content.trim();
     return reply;
   } catch (err) {
-    console.error("❌ OpenAI Error:", err?.response?.data || err.message);
-    return "Sorry, there was an error generating your response.";
-  }
+  const status = err?.response?.status;
+  const data = err?.response?.data;
+  console.error("❌ OpenAI Error Status:", status);
+  console.error("❌ OpenAI Error Data:", JSON.stringify(data, null, 2));
+  return "Sorry, there was an error generating your response.";
+}
 }
 
 /**
