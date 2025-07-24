@@ -3,10 +3,10 @@ const fs = require("fs");
 const path = require("path");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_ORG_ID = process.env.OPENAI_ORG_ID;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const VISION_MODEL = "gpt-4-vision-preview"; // For future image input
-const CHAT_MODEL = "gpt-4o"; // Confirmed supported
+const VISION_MODEL = "gpt-4-vision-preview"; // reserved for future image input
+const CHAT_MODEL = "gpt-4o"; // confirmed available
+const ORG_ID = "org-zIbrQYLncbLYy1wQog2p6L8n"; // ✅ hardcoded organization ID
 
 // ✅ Load the STRUKT system prompt
 const systemPrompt = fs.readFileSync(
@@ -23,13 +23,16 @@ const systemPrompt = fs.readFileSync(
  */
 async function getAIReply(userMessage, context = {}, imageBase64 = null) {
   try {
+    // 👤 Construct identity-aware pre-prompt (optional)
     const contextString = buildContextString(context);
 
+    // 🧠 Build the core message array
     const messages = [
       { role: "system", content: `${systemPrompt}${contextString}` },
       { role: "user", content: userMessage }
     ];
 
+    // 📷 Optional image input (for future use)
     const payload = imageBase64
       ? {
           model: VISION_MODEL,
@@ -57,12 +60,19 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
           temperature: 0.7
         };
 
-    // ✅ Include org ID in headers
+    // 🚀 Debug log headers
+    console.log("🔍 DEBUG HEADERS:", {
+      Authorization: `Bearer ${OPENAI_API_KEY?.slice(0, 10)}...`,
+      "OpenAI-Organization": ORG_ID,
+      "Content-Type": "application/json"
+    });
+
+    // 🚀 Send request to OpenAI
     const res = await axios.post(OPENAI_URL, payload, {
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-        "OpenAI-Organization": OPENAI_ORG_ID
+        "OpenAI-Organization": ORG_ID,
+        "Content-Type": "application/json"
       }
     });
 
