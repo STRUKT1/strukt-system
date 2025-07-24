@@ -4,9 +4,10 @@ const path = require("path");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+const ORG_ID = process.env.OPENAI_ORG_ID;
+const PROJECT_ID = process.env.OPENAI_PROJECT_ID;
 const VISION_MODEL = "gpt-4-vision-preview"; // reserved for future image input
-const CHAT_MODEL = "gpt-4o"; // confirmed available
-const ORG_ID = "org-zIbrQYLncbLYy1wQog2p6L8n"; // ✅ hardcoded organization ID
+const CHAT_MODEL = "gpt-4o"; // ✅ confirmed available to your key
 
 // ✅ Load the STRUKT system prompt
 const systemPrompt = fs.readFileSync(
@@ -23,16 +24,13 @@ const systemPrompt = fs.readFileSync(
  */
 async function getAIReply(userMessage, context = {}, imageBase64 = null) {
   try {
-    // 👤 Construct identity-aware pre-prompt (optional)
     const contextString = buildContextString(context);
 
-    // 🧠 Build the core message array
     const messages = [
       { role: "system", content: `${systemPrompt}${contextString}` },
       { role: "user", content: userMessage }
     ];
 
-    // 📷 Optional image input (for future use)
     const payload = imageBase64
       ? {
           model: VISION_MODEL,
@@ -60,10 +58,11 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
           temperature: 0.7
         };
 
-    // 🚀 Debug log headers
+    // 🐛 Debug log headers
     console.log("🔍 DEBUG HEADERS:", {
       Authorization: `Bearer ${OPENAI_API_KEY?.slice(0, 10)}...`,
       "OpenAI-Organization": ORG_ID,
+      "OpenAI-Project": PROJECT_ID,
       "Content-Type": "application/json"
     });
 
@@ -72,6 +71,7 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
         "OpenAI-Organization": ORG_ID,
+        "OpenAI-Project": PROJECT_ID,
         "Content-Type": "application/json"
       }
     });
@@ -79,12 +79,14 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
     const reply = res.data.choices[0].message.content.trim();
     return reply;
   } catch (err) {
-  const status = err?.response?.status;
-  const data = err?.response?.data;
-  console.error("❌ OpenAI Error Status:", status);
-  console.error("❌ OpenAI Error Data:", JSON.stringify(data, null, 2));
-  return "Sorry, there was an error generating your response.";
-}
+    const status = err?.response?.status;
+    const data = err?.response?.data;
+
+    console.error("❌ OpenAI Error Status:", status);
+    console.error("❌ OpenAI Error Data:", JSON.stringify(data, null, 2));
+
+    return "Sorry, there was an error generating your response.";
+  }
 }
 
 /**
