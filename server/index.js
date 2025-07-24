@@ -1,10 +1,13 @@
 const express = require("express");
+const cors = require("cors"); // 👈 Add this line
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+app.use(cors()); // 👈 Add this line
 app.use(express.json());
 
 // ✅ Load STRUKT system prompt (optional inline reference)
