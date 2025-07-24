@@ -32,31 +32,31 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
     ];
 
     const payload = imageBase64
-      ? {
-          model: VISION_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt },
+  ? {
+      model: VISION_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: userMessage },
             {
-              role: "user",
-              content: [
-                { type: "text", text: userMessage },
-                {
-                  type: "image_url",
-                  image_url: {
-                    detail: "high",
-                    url: `data:image/jpeg;base64,${imageBase64}`
-                  }
-                }
-              ]
+              type: "image_url",
+              image_url: {
+                detail: "high",
+                url: `data:image/jpeg;base64,${imageBase64}`
+              }
             }
-          ],
-          max_tokens: 1000
+          ]
         }
-      : {
-          model: CHAT_MODEL,
-          messages,
-          temperature: 0.7
-        };
+      ],
+      max_tokens: 1000
+    }
+  : {
+      model: "gpt-3.5-turbo", // ⛑ Temporary fallback to confirm system works
+      messages,
+      temperature: 0.7
+    };
 
     // 🐛 Debug log headers
     console.log("🔍 DEBUG HEADERS:", {
