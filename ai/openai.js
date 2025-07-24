@@ -4,7 +4,8 @@ const path = require("path");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const VISION_MODEL = "gpt-4-vision-preview"; // Optional future use
+const VISION_MODEL = "gpt-4-vision-preview"; // reserved for future image input
+const CHAT_MODEL = "gpt-4o"; // ✅ confirmed available to your key
 
 // ✅ Load the STRUKT system prompt
 const systemPrompt = fs.readFileSync(
@@ -30,15 +31,12 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
       { role: "user", content: userMessage }
     ];
 
-    // 📷 Add vision input if image is supplied (future)
+    // 📷 Optional image input (for future use)
     const payload = imageBase64
       ? {
           model: VISION_MODEL,
           messages: [
-            {
-              role: "system",
-              content: systemPrompt
-            },
+            { role: "system", content: systemPrompt },
             {
               role: "user",
               content: [
@@ -56,12 +54,12 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
           max_tokens: 1000
         }
       : {
-          model: "gpt-4o",
+          model: CHAT_MODEL, // ✅ using gpt-4o
           messages,
           temperature: 0.7
         };
 
-    // 🚀 Send to OpenAI
+    // 🚀 Send request to OpenAI
     const res = await axios.post(OPENAI_URL, payload, {
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -78,7 +76,7 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
 }
 
 /**
- * Converts user context into a string to inject into the prompt.
+ * Converts user context into a string to inject into the system prompt
  */
 function buildContextString(context = {}) {
   let contextLines = [];
