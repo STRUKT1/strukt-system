@@ -56,7 +56,7 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
           max_tokens: 1000
         }
       : {
-          model: "gpt-4",
+          model: "gpt-4o",
           messages,
           temperature: 0.7
         };
