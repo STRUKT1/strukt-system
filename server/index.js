@@ -55,6 +55,25 @@ app.post("/ask", async (req, res) => {
   }
 });
 
+// ✅ TEMP TEST: List available OpenAI models
+app.get("/api/models", async (req, res) => {
+  try {
+    const axios = require("axios");
+
+    const response = await axios.get("https://api.openai.com/v1/models", {
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+      }
+    });
+
+    const models = response.data.data.map((model) => model.id);
+    res.json({ availableModels: models });
+  } catch (err) {
+    console.error("❌ Error fetching models:", err?.response?.data || err.message);
+    res.status(500).json({ error: "Failed to fetch models", details: err?.response?.data || err.message });
+  }
+});
+
 // ✅ Unified /log route
 app.post("/log", async (req, res) => {
   const { email, topic, message, coachReply, logType, meal, workout, supplement, sleep, mood, reflection } = req.body;
