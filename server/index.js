@@ -2,7 +2,17 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
+const app = express();
+const port = process.env.PORT || 3000;
+app.use(express.json());
 
+// Load STRUKT system prompt
+const systemPrompt = fs.readFileSync(
+  path.join(__dirname, "../utils/prompts/strukt-system-prompt.txt"),
+  "utf-8"
+);
+
+// Logging functions
 const {
   logChatInteraction,
   logMeal,
@@ -13,49 +23,41 @@ const {
   logReflection
 } = require("../utils/logging");
 
-const app = express();
-const port = process.env.PORT || 3000;
-app.use(express.json());
-
-// ✅ Load STRUKT AI system prompt
-const systemPrompt = fs.readFileSync(
-  path.join(__dirname, "../utils/prompts/strukt-system-prompt.txt"),
-  "utf-8"
-);
-
+// ✅ Unified logging endpoint
 app.post("/log", async (req, res) => {
-  const { email, topic, message, coachReply, logType, meal, workout, supplement, sleep, mood, reflection } = req.body;
+  const { email, topic, message, coachReply, logType } = req.body;
 
   try {
-    // ✅ Always log the chat interaction
-    await logChatInteraction(email, topic, message, coachReply);
+    // Always log chat interaction if message + reply exist
+    if (message && coachReply) {
+      await logChatInteraction(email, topic, message, coachReply);
+    }
 
-    // ✅ Conditionally log the specific entry type
-    if (logType === "meal" && meal) {
-      await logMeal(email, meal);
-    } else if (logType === "workout" && workout) {
-      await logWorkout(email, workout);
-    } else if (logType === "supplement" && supplement) {
-      await logSupplement(email, supplement);
-    } else if (logType === "sleep" && sleep) {
-      await logSleep(email, sleep);
-    } else if (logType === "mood" && mood) {
-      await logMood(email, mood);
-    } else if (logType === "reflection" && reflection) {
-      await logReflection(email, reflection);
+    // Handle each log type if data is present
+    if (logType === "meal" && req.body.meal) {
+      await logMeal(email, req.body.meal);
+    } else if (logType === "workout" && req.body.workout) {
+      await logWorkout(email, req.body.workout);
+    } else if (logType === "supplement" && req.body.supplement) {
+      await logSupplement(email, req.body.supplement);
+    } else if (logType === "sleep" && req.body.sleep) {
+      await logSleep(email, req.body.sleep);
+    } else if (logType === "mood" && req.body.mood) {
+      await logMood(email, req.body.mood);
+    } else if (logType === "reflection" && req.body.reflection) {
+      await logReflection(email, req.body.reflection);
     }
 
     res.status(200).send("✅ Log successful");
   } catch (err) {
-    console.error("🔥 Logging Error:");
-    if (err.response) {
-      console.error("Status:", err.response.status);
-      console.error("Data:", JSON.stringify(err.response.data, null, 2));
-    } else {
-      console.error("Message:", err.message);
-    }
+    console.error("🔥 Logging error:", err?.response?.data || err.message);
     res.status(500).send("❌ Logging failed");
   }
+});
+
+// Health check
+app.get("/", (req, res) => {
+  res.send("✅ STRUKT Coach API is running.");
 });
 
 app.listen(port, () => {
