@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_ORG_ID = process.env.OPENAI_ORG_ID; // ✅ NEW: Pull org ID
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const VISION_MODEL = "gpt-4-vision-preview"; // reserved for future image input
 const CHAT_MODEL = "gpt-4o"; // ✅ confirmed available to your key
@@ -63,7 +64,8 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
     const res = await axios.post(OPENAI_URL, payload, {
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "OpenAI-Organization": OPENAI_ORG_ID // ✅ NEW: Include org header
       }
     });
 
