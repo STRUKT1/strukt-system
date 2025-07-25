@@ -1,5 +1,5 @@
 const express = require("express");
-const cors = require("cors"); // 👈 Add this line
+const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
@@ -7,16 +7,16 @@ require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors()); // 👈 Add this line
+app.use(cors());
 app.use(express.json());
 
-// ✅ Load STRUKT system prompt (optional inline reference)
+// ✅ Load STRUKT system prompt (optional)
 const systemPrompt = fs.readFileSync(
   path.join(__dirname, "../utils/prompts/strukt-system-prompt.txt"),
   "utf-8"
 );
 
-// ✅ Import logging + AI functions
+// ✅ Import logging functions only
 const {
   logChatInteraction,
   logMeal,
@@ -27,35 +27,59 @@ const {
   logReflection
 } = require("../utils/logging");
 
-const { getAIReply } = require("../ai/openai");
-
 // ✅ HEALTH CHECK
 app.get("/", (req, res) => {
   res.send("✅ STRUKT server is live");
 });
 
-// ✅ /ASK — AI Coach reply
+// ✅ /ASK — Simplified direct call to OpenAI (no OpenAI.js)
 app.post("/ask", async (req, res) => {
-  const { message, email, context = {}, imageBase64 = null } = req.body;
+  const { message, email } = req.body;
 
   if (!message || !email) {
     return res.status(400).json({ error: "Missing message or email" });
   }
 
   try {
-    const aiReply = await getAIReply(message, context, imageBase64);
+    const axios = require("axios");
 
-    // Optional: log the chat interaction
-    await logChatInteraction(email, "Chat", message, aiReply);
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are the STRUKT Coach. Respond helpfully when spoken to."
+          },
+          {
+            role: "user",
+            content: message
+          }
+        ],
+        temperature: 0.7
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
-    res.status(200).json({ reply: aiReply });
+    const reply = response.data.choices[0].message.content.trim();
+
+    // Optional logging
+    await logChatInteraction(email, "Chat", message, reply);
+
+    res.status(200).json({ reply });
   } catch (err) {
     console.error("❌ /ask error:", err?.response?.data || err.message);
     res.status(500).json({ error: "AI response failed" });
   }
 });
 
-// ✅ TEMP TEST: List available OpenAI models
+// ✅ TEMP: Fetch available OpenAI models
 app.get("/api/models", async (req, res) => {
   try {
     const axios = require("axios");
@@ -74,9 +98,21 @@ app.get("/api/models", async (req, res) => {
   }
 });
 
-// ✅ Unified /log route
+// ✅ UNIFIED /log route
 app.post("/log", async (req, res) => {
-  const { email, topic, message, coachReply, logType, meal, workout, supplement, sleep, mood, reflection } = req.body;
+  const {
+    email,
+    topic,
+    message,
+    coachReply,
+    logType,
+    meal,
+    workout,
+    supplement,
+    sleep,
+    mood,
+    reflection
+  } = req.body;
 
   try {
     if (logType === "meal") await logMeal(email, meal);
@@ -97,6 +133,7 @@ app.post("/log", async (req, res) => {
   }
 });
 
+// ✅ Start server
 app.listen(port, () => {
   console.log(`🚀 STRUKT Coach server running on port ${port}`);
 });
