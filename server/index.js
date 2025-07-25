@@ -10,13 +10,13 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ Load STRUKT system prompt (optional)
+// ✅ Load STRUKT system prompt
 const systemPrompt = fs.readFileSync(
   path.join(__dirname, "../utils/prompts/strukt-system-prompt.txt"),
   "utf-8"
 );
 
-// ✅ Import logging functions only
+// ✅ Import logging functions
 const {
   logChatInteraction,
   logMeal,
@@ -27,12 +27,12 @@ const {
   logReflection
 } = require("../utils/logging");
 
-// ✅ HEALTH CHECK
+// ✅ Health check route
 app.get("/", (req, res) => {
   res.send("✅ STRUKT server is live");
 });
 
-// ✅ /ASK — Simplified direct call to OpenAI (no OpenAI.js)
+// ✅ /ask — OpenAI request + logging
 app.post("/ask", async (req, res) => {
   const { message, email } = req.body;
 
@@ -48,14 +48,8 @@ app.post("/ask", async (req, res) => {
       {
         model: "gpt-4o",
         messages: [
-          {
-            role: "system",
-            content: "You are the STRUKT Coach. Respond helpfully when spoken to."
-          },
-          {
-            role: "user",
-            content: message
-          }
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
         ],
         temperature: 0.7
       },
@@ -69,7 +63,6 @@ app.post("/ask", async (req, res) => {
 
     const reply = response.data.choices[0].message.content.trim();
 
-    // Optional logging
     await logChatInteraction(email, "Chat", message, reply);
 
     res.status(200).json({ reply });
@@ -79,7 +72,7 @@ app.post("/ask", async (req, res) => {
   }
 });
 
-// ✅ TEMP: Fetch available OpenAI models
+// ✅ /api/models — TEMP: list available models
 app.get("/api/models", async (req, res) => {
   try {
     const axios = require("axios");
@@ -94,11 +87,14 @@ app.get("/api/models", async (req, res) => {
     res.json({ availableModels: models });
   } catch (err) {
     console.error("❌ Error fetching models:", err?.response?.data || err.message);
-    res.status(500).json({ error: "Failed to fetch models", details: err?.response?.data || err.message });
+    res.status(500).json({
+      error: "Failed to fetch models",
+      details: err?.response?.data || err.message
+    });
   }
 });
 
-// ✅ UNIFIED /log route
+// ✅ /log — Unified logging endpoint
 app.post("/log", async (req, res) => {
   const {
     email,
