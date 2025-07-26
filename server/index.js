@@ -7,7 +7,7 @@ require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// ✅ Sanity check for API key length
+// ✅ One-time debug: Check API key length to rule out truncation
 console.log("✅ ENV DEBUG:", {
   PORT: process.env.PORT,
   OPENAI_API_KEY_LENGTH: process.env.OPENAI_API_KEY?.length
@@ -33,12 +33,12 @@ const {
   logReflection
 } = require("../utils/logging");
 
-// ✅ Health check route
+// ✅ Health check
 app.get("/", (req, res) => {
   res.send("✅ STRUKT server is live");
 });
 
-// ✅ /ask — OpenAI request + logging
+// ✅ /ask — Chat with OpenAI
 app.post("/ask", async (req, res) => {
   const { message, email } = req.body;
 
@@ -78,14 +78,15 @@ app.post("/ask", async (req, res) => {
   }
 });
 
-// ✅ /api/models — TEMP: list available models
+// ✅ /api/models — List available models
 app.get("/api/models", async (req, res) => {
   try {
     const axios = require("axios");
 
     const response = await axios.get("https://api.openai.com/v1/models", {
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
       }
     });
 
@@ -100,7 +101,7 @@ app.get("/api/models", async (req, res) => {
   }
 });
 
-// ✅ /log — Unified logging endpoint
+// ✅ /log — Unified logging
 app.post("/log", async (req, res) => {
   const {
     email,
@@ -135,7 +136,7 @@ app.post("/log", async (req, res) => {
   }
 });
 
-// ✅ Start server
+// ✅ Start the server
 app.listen(port, () => {
   console.log(`🚀 STRUKT Coach server running on port ${port}`);
 });
