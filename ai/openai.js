@@ -3,11 +3,11 @@ const fs = require("fs");
 const path = require("path");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const ORG_ID = process.env.OPENAI_ORG_ID;
-const PROJECT_ID = process.env.OPENAI_PROJECT_ID;
-const VISION_MODEL = "gpt-4-vision-preview";
+const OPENAI_PROJECT_ID = process.env.OPENAI_PROJECT_ID;
+
 const CHAT_MODEL = "gpt-4o";
+const VISION_MODEL = "gpt-4-vision-preview";
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 // ✅ Load the STRUKT system prompt
 const systemPrompt = fs.readFileSync(
@@ -20,7 +20,7 @@ const systemPrompt = fs.readFileSync(
  *
  * @param {string} userMessage - The user’s raw input.
  * @param {object} context - Optional context (e.g. coachingTone, dietaryNeeds).
- * @param {string} imageBase64 - Optional image in base64 format (for future vision).
+ * @param {string} imageBase64 - Optional image in base64 format (for vision).
  */
 async function getAIReply(userMessage, context = {}, imageBase64 = null) {
   try {
@@ -58,21 +58,12 @@ async function getAIReply(userMessage, context = {}, imageBase64 = null) {
           temperature: 0.7
         };
 
-    // ✅ Determine headers based on key type
     const headers = {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "OpenAI-Project": OPENAI_PROJECT_ID,
       "Content-Type": "application/json"
     };
 
-    if (!OPENAI_API_KEY?.startsWith("sk-proj-")) {
-      headers["OpenAI-Organization"] = ORG_ID;
-      headers["OpenAI-Project"] = PROJECT_ID;
-    }
-
-    // 🐛 Debug: log the actual headers being sent
-    console.log("🔍 DEBUG HEADERS:", headers);
-
-    // 🚀 Send request to OpenAI
     const res = await axios.post(OPENAI_URL, payload, { headers });
 
     const reply = res.data.choices[0].message.content.trim();
