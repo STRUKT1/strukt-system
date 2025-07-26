@@ -7,11 +7,10 @@ require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// ✅ ENV DEBUG
-console.log("🔍 ENV DEBUG:", {
+// ✅ Sanity check for API key length
+console.log("✅ ENV DEBUG:", {
   PORT: process.env.PORT,
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY?.slice(0, 12),
-  OPENAI_PROJECT_ID: process.env.OPENAI_PROJECT_ID
+  OPENAI_API_KEY_LENGTH: process.env.OPENAI_API_KEY?.length
 });
 
 app.use(cors());
@@ -63,7 +62,6 @@ app.post("/ask", async (req, res) => {
       {
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "OpenAI-Project": process.env.OPENAI_PROJECT_ID,
           "Content-Type": "application/json"
         }
       }
@@ -87,8 +85,7 @@ app.get("/api/models", async (req, res) => {
 
     const response = await axios.get("https://api.openai.com/v1/models", {
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "OpenAI-Project": process.env.OPENAI_PROJECT_ID
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
       }
     });
 
