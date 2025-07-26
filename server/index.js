@@ -56,6 +56,7 @@ app.post("/ask", async (req, res) => {
       {
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "OpenAI-Project": process.env.OPENAI_PROJECT_ID, // ✅ Required for sk-proj keys
           "Content-Type": "application/json"
         }
       }
@@ -79,7 +80,8 @@ app.get("/api/models", async (req, res) => {
 
     const response = await axios.get("https://api.openai.com/v1/models", {
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "OpenAI-Project": process.env.OPENAI_PROJECT_ID // ✅ Also required here if using project ID
       }
     });
 
