@@ -20,16 +20,16 @@ const CHAT_TABLE_ID = 'tblDtOOmahkMYEqmy';
  * function uses Airtable’s sort and pageSize parameters to limit the
  * number of records.
  *
- * @param {string} userId Airtable record ID of the user
+ * @param {string} userEmail User's email address (must match Airtable field "Email Address")
  * @param {number} limit Maximum number of records to fetch (default 5)
  * @returns {Promise<Array<{ message: string, aiResponse: string }>>}
  */
-async function getRecentChatHistory(userId, limit = 5) {
+async function getRecentChatHistory(userEmail, limit = 5) {
   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${CHAT_TABLE_ID}`;
   const res = await axios.get(url, {
     headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
     params: {
-      filterByFormula: `{fldDtbxnE1PyTleqo} = '${userId}'`,
+      filterByFormula: `{Email Address} = '${userEmail}'`,
       sort: '[{"field":"fld1WNv8Oj0PU0ODt","direction":"desc"}]',
       maxRecords: limit,
     },
