@@ -1,103 +1,127 @@
-const axios = require("axios");
+// utils/logging.js
+
+/**
+ * Airtable logging utilities for STRUKT.  These functions encapsulate the
+ * logic for writing structured records to Airtable tables such as chat
+ * interactions, meals, workouts, supplements, sleep, mood and reflections.
+ *
+ * To use these functions, ensure the following environment variables are
+ * provided: `AIRTABLE_BASE_ID` and `AIRTABLE_API_KEY`.  Table and field
+ * identifiers should be kept in sync with your Airtable base.  If new
+ * tables/fields are added, update the TABLE_IDS and FIELD_IDS objects.
+ */
+
+const axios = require('axios');
 
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 
 // ✅ Table IDs
 const TABLE_IDS = {
-  users: "Users",
-  chat: "tblDtOOmahkMYEqmy",
-  meals: "tblWLkTKkxkSEcySD",
-  workouts: "tblgqvIqFetN2s23J",
-  supplements: "tblZ8F0Z8ZcMDYdej",
-  sleep: "tblFepeTBkng3zDSY",
-  mood: "tbltkNq7OSUcu4Xpp",
-  reflections: "tblDrFwiJTYGjOfEv"
+  // Use Airtable table IDs rather than names to avoid issues when
+  // table names change.  See the debug pack for details.
+  users: 'tbl87AICCbvbgrLCY',
+  chat: 'tblDtOOmahkMYEqmy',
+  meals: 'tblWLkTKkxkSEcySD',
+  workouts: 'tblgqvIqFetN2s23J',
+  supplements: 'tblZ8F0Z8ZcMDYdej',
+  sleep: 'tblFepeTBkng3zDSY',
+  mood: 'tbltkNq7OSUcu4Xpp',
+  reflections: 'tblDrFwiJTYGjOfEv',
 };
 
 // ✅ Field IDs
 const FIELD_IDS = {
   chat: {
-    Name: "fldcHOwNiQlFpwuly",
-    User: "fldDtbxnE1PyTleqo",
-    Message: "fldgNRKet3scJ8PIe",
-    AI_Response: "fld3vU9nKXNmu6OZV",
-    Topic: "fld2eLzWRUnKNR7Im"
+    Name: 'fldcHOwNiQlFpwuly',
+    User: 'fldDtbxnE1PyTleqo',
+    Message: 'fldgNRKet3scJ8PIe',
+    AI_Response: 'fld3vU9nKXNmu6OZV',
+    Topic: 'fld2eLzWRUnKNR7Im',
   },
   meals: {
-    User: "fldaTFIo8vKLoQYhS",
-    Description: "fldLJXOsnTDqfp9mJ",
-    Calories: "fldUOPuN6n39Aj1v7",
-    Protein: "fldbqKkHfEqmStvbn",
-    Carbs: "fld8EvDjPVmY5vfhR",
-    Fats: "fldLnl83bsw9ZSCka",
-    MealType: "fldoN35qBpJ2y7OFS",
-    MealSource: "fld5DuMMbBBnYbCnS"
+    User: 'fldaTFIo8vKLoQYhS',
+    Description: 'fldLJXOsnTDqfp9mJ',
+    Calories: 'fldUOPuN6n39Aj1v7',
+    Protein: 'fldbqKkHfEqmStvbn',
+    Carbs: 'fld8EvDjPVmY5vfhR',
+    Fats: 'fldLnl83bsw9ZSCka',
+    MealType: 'fldoN35qBpJ2y7OFS',
+    MealSource: 'fld5DuMMbBBnYbCnS',
   },
   workouts: {
-    User: "fldUuYZtmkiycOVnb",
-    Date: "fldzVeaYTUHMxMDd9",
-    Type: "fld9xRDtOz1mBkDQ5",
-    Description: "fldKkhKomMg3Cf108",
-    Duration: "fldaij5HlQKv8gMcT",
-    Calories: "fld2muGFVrfM0xHmI",
-    Notes: "fld1aEpGu5H8DWPxY"
+    User: 'fldUuYZtmkiycOVnb',
+    Date: 'fldzVeaYTUHMxMDd9',
+    Type: 'fld9xRDtOz1mBkDQ5',
+    Description: 'fldKkhKomMg3Cf108',
+    Duration: 'fldaij5HlQKv8gMcT',
+    Calories: 'fld2muGFVrfM0xHmI',
+    Notes: 'fld1aEpGu5H8DWPxY',
   },
   supplements: {
-    User: "fldzShNTWJornIZnP",
-    Date: "fldQfsrapotczQaCY",
-    Time: "fldSherUQZmn2ts73",
-    SupplementName: "fldad6mLDsXYMks5A",
-    Notes: "fldEoF1lbZoj3wPhO",
-    LogType: "fldzGOKvw0IF0Rbmn",
-    Confirmed: "fldiqJbsxO4yx4JvB"
+    User: 'fldzShNTWJornIZnP',
+    Date: 'fldQfsrapotczQaCY',
+    Time: 'fldSherUQZmn2ts73',
+    SupplementName: 'fldad6mLDsXYMks5A',
+    Notes: 'fldEoF1lbZoj3wPhO',
+    LogType: 'fldzGOKvw0IF0Rbmn',
+    Confirmed: 'fldiqJbsxO4yx4JvB',
   },
   sleep: {
-    User: "fldabdr3bNgGqBawm",
-    Date: "fldTvCL5QQ9g7fXfw",
-    Duration: "fldt7AKiAq2qfHs89",
-    Quality: "fldfdd8WYqyWx6Ckc",
-    Bedtime: "fldu544VmBsGIvEuw",
-    WakeTime: "fld43mo9Z09vYzoGb",
-    Notes: "fldzLiz85up5WqPAq"
+    User: 'fldabdr3bNgGqBawm',
+    Date: 'fldTvCL5QQ9g7fXfw',
+    Duration: 'fldt7AKiAq2qfHs89',
+    Quality: 'fldfdd8WYqyWx6Ckc',
+    Bedtime: 'fldu544VmBsGIvEuw',
+    WakeTime: 'fld43mo9Z09vYzoGb',
+    Notes: 'fldzLiz85up5WqPAq',
   },
   mood: {
-    User: "flddOxxse2QJe6DMk",
-    Date: "fldKVcXqCXvabybIb",
-    Mood: "fldUpnuuJRYIBy4mL",
-    Notes: "fldFMbuWMrBlhScua",
-    Energy: "fld6isxdyHYfjqsQM",
-    Stress: "fldmLOpTwpzUc0F4Y"
+    User: 'flddOxxse2QJe6DMk',
+    Date: 'fldKVcXqCXvabybIb',
+    Mood: 'fldUpnuuJRYIBy4mL',
+    Notes: 'fldFMbuWMrBlhScua',
+    Energy: 'fld6isxdyHYfjqsQM',
+    Stress: 'fldmLOpTwpzUc0F4Y',
   },
   reflections: {
-    User: "fldub69oCFo7ruloF",
-    Date: "fldZibMunrMSu8iRC",
-    WentWell: "fldYpH7CM04KeDuT4",
-    Challenge: "fldMeD609rZU7w8pI",
-    Tomorrow: "fldmDUQ8fkYCYwCUG",
-    Highlight: "fldmfnusmD5b4C6Dn"
-  }
+    User: 'fldub69oCFo7ruloF',
+    Date: 'fldZibMunrMSu8iRC',
+    WentWell: 'fldYpH7CM04KeDuT4',
+    Challenge: 'fldMeD609rZU7w8pI',
+    Tomorrow: 'fldmDUQ8fkYCYwCUG',
+    Highlight: 'fldmfnusmD5b4C6Dn',
+  },
 };
 
-// ✅ Find User ID
+/**
+ * Find a user record ID in Airtable given their email address.
+ *
+ * @param {string} email User’s email address
+ * @returns {Promise<string|null>} The Airtable record ID or null if not found
+ */
 async function findUserIdByEmail(email) {
-  const url =
-    "https://api.airtable.com/v0/" +
-    AIRTABLE_BASE_ID +
-    "/" +
-    TABLE_IDS.users;
+  // Perform a case‑insensitive lookup on the Email Address field.  Use
+  // the field ID to avoid breakage if the field name changes.  The
+  // LOWER() function converts both the stored email and the input to
+  // lowercase for comparison.
+  const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.users}`;
+  const filter = `LOWER({fldgyVjQJc389lqNA}) = '${email.toLowerCase()}'`;
   const res = await axios.get(url, {
-    headers: { Authorization: "Bearer " + AIRTABLE_API_KEY },
-    params: { filterByFormula: "{Email Address} = '" + email + "'" }
+    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+    params: { filterByFormula: filter, maxRecords: 1 },
   });
   return res.data.records[0]?.id || null;
 }
 
-// ✅ Log Chat
+/**
+ * Log a chat interaction.  Stores the user message, AI reply and topic in
+ * Airtable.  Errors are caught and logged to console; failure does not
+ * propagate to callers because logging should not block the chat flow.
+ */
 async function logChatInteraction(email, topic, message, aiReply) {
   const userId = await findUserIdByEmail(email);
   if (!userId) return;
-
   try {
     await axios.post(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.chat}`,
@@ -107,27 +131,28 @@ async function logChatInteraction(email, topic, message, aiReply) {
           [FIELD_IDS.chat.User]: [userId],
           [FIELD_IDS.chat.Message]: message,
           [FIELD_IDS.chat.AI_Response]: aiReply,
-          [FIELD_IDS.chat.Topic]: topic || "Other"
-        }
+          [FIELD_IDS.chat.Topic]: topic || 'Other',
+        },
       },
       {
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
+          'Content-Type': 'application/json',
+        },
+      },
     );
     console.log(`✅ Chat logged for ${email}`);
   } catch (err) {
-    console.error("❌ Chat logging failed", err?.response?.data || err.message);
+    console.error('❌ Chat logging failed', err?.response?.data || err.message);
   }
 }
 
-// ✅ Log Meal
+/**
+ * Log a meal entry.
+ */
 async function logMeal(email, meal) {
   const userId = await findUserIdByEmail(email);
   if (!userId) return;
-
   try {
     await axios.post(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.meals}`,
@@ -140,27 +165,28 @@ async function logMeal(email, meal) {
           [FIELD_IDS.meals.Carbs]: meal.carbs,
           [FIELD_IDS.meals.Fats]: meal.fats,
           [FIELD_IDS.meals.MealType]: meal.mealType,
-          [FIELD_IDS.meals.MealSource]: meal.mealSource || "AI-Estimated"
-        }
+          [FIELD_IDS.meals.MealSource]: meal.mealSource || 'AI-Estimated',
+        },
       },
       {
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
+          'Content-Type': 'application/json',
+        },
+      },
     );
     console.log(`✅ Meal logged for ${email}`);
   } catch (err) {
-    console.error("❌ Meal logging failed", err?.response?.data || err.message);
+    console.error('❌ Meal logging failed', err?.response?.data || err.message);
   }
 }
 
-// ✅ Log Workout
+/**
+ * Log a workout entry.
+ */
 async function logWorkout(email, workout) {
   const userId = await findUserIdByEmail(email);
   if (!userId) return;
-
   try {
     await axios.post(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.workouts}`,
@@ -172,27 +198,28 @@ async function logWorkout(email, workout) {
           [FIELD_IDS.workouts.Description]: workout.description,
           [FIELD_IDS.workouts.Duration]: workout.duration,
           [FIELD_IDS.workouts.Calories]: workout.calories,
-          [FIELD_IDS.workouts.Notes]: workout.notes
-        }
+          [FIELD_IDS.workouts.Notes]: workout.notes,
+        },
       },
       {
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
+          'Content-Type': 'application/json',
+        },
+      },
     );
     console.log(`✅ Workout logged for ${email}`);
   } catch (err) {
-    console.error("❌ Workout logging failed", err?.response?.data || err.message);
+    console.error('❌ Workout logging failed', err?.response?.data || err.message);
   }
 }
 
-// ✅ Log Supplement
+/**
+ * Log a supplement entry.
+ */
 async function logSupplement(email, supplement) {
   const userId = await findUserIdByEmail(email);
   if (!userId) return;
-
   try {
     await axios.post(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.supplements}`,
@@ -203,28 +230,29 @@ async function logSupplement(email, supplement) {
           [FIELD_IDS.supplements.Time]: supplement.time,
           [FIELD_IDS.supplements.SupplementName]: supplement.name,
           [FIELD_IDS.supplements.Notes]: supplement.notes,
-          [FIELD_IDS.supplements.LogType]: supplement.logType || "AI",
-          [FIELD_IDS.supplements.Confirmed]: true
-        }
+          [FIELD_IDS.supplements.LogType]: supplement.logType || 'AI',
+          [FIELD_IDS.supplements.Confirmed]: true,
+        },
       },
       {
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
+          'Content-Type': 'application/json',
+        },
+      },
     );
     console.log(`✅ Supplement logged for ${email}`);
   } catch (err) {
-    console.error("❌ Supplement logging failed", err?.response?.data || err.message);
+    console.error('❌ Supplement logging failed', err?.response?.data || err.message);
   }
 }
 
-// ✅ Log Sleep
+/**
+ * Log a sleep entry.
+ */
 async function logSleep(email, sleep) {
   const userId = await findUserIdByEmail(email);
   if (!userId) return;
-
   try {
     await axios.post(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.sleep}`,
@@ -236,27 +264,28 @@ async function logSleep(email, sleep) {
           [FIELD_IDS.sleep.Quality]: sleep.quality,
           [FIELD_IDS.sleep.Bedtime]: sleep.bedtime,
           [FIELD_IDS.sleep.WakeTime]: sleep.wakeTime,
-          [FIELD_IDS.sleep.Notes]: sleep.notes
-        }
+          [FIELD_IDS.sleep.Notes]: sleep.notes,
+        },
       },
       {
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
+          'Content-Type': 'application/json',
+        },
+      },
     );
     console.log(`✅ Sleep logged for ${email}`);
   } catch (err) {
-    console.error("❌ Sleep logging failed", err?.response?.data || err.message);
+    console.error('❌ Sleep logging failed', err?.response?.data || err.message);
   }
 }
 
-// ✅ Log Mood
+/**
+ * Log a mood entry.
+ */
 async function logMood(email, mood) {
   const userId = await findUserIdByEmail(email);
   if (!userId) return;
-
   try {
     await axios.post(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.mood}`,
@@ -267,27 +296,28 @@ async function logMood(email, mood) {
           [FIELD_IDS.mood.Mood]: mood.rating,
           [FIELD_IDS.mood.Notes]: mood.notes,
           [FIELD_IDS.mood.Energy]: mood.energy,
-          [FIELD_IDS.mood.Stress]: mood.stress
-        }
+          [FIELD_IDS.mood.Stress]: mood.stress,
+        },
       },
       {
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
+          'Content-Type': 'application/json',
+        },
+      },
     );
     console.log(`✅ Mood logged for ${email}`);
   } catch (err) {
-    console.error("❌ Mood logging failed", err?.response?.data || err.message);
+    console.error('❌ Mood logging failed', err?.response?.data || err.message);
   }
 }
 
-// ✅ Log Daily Reflection
+/**
+ * Log a daily reflection entry.
+ */
 async function logReflection(email, reflection) {
   const userId = await findUserIdByEmail(email);
   if (!userId) return;
-
   try {
     await axios.post(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.reflections}`,
@@ -298,29 +328,31 @@ async function logReflection(email, reflection) {
           [FIELD_IDS.reflections.WentWell]: reflection.wentWell,
           [FIELD_IDS.reflections.Challenge]: reflection.challenge,
           [FIELD_IDS.reflections.Tomorrow]: reflection.tomorrow,
-          [FIELD_IDS.reflections.Highlight]: reflection.highlight
-        }
+          [FIELD_IDS.reflections.Highlight]: reflection.highlight,
+        },
       },
       {
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
+          'Content-Type': 'application/json',
+        },
+      },
     );
     console.log(`✅ Reflection logged for ${email}`);
   } catch (err) {
-    console.error("❌ Reflection logging failed", err?.response?.data || err.message);
+    console.error('❌ Reflection logging failed', err?.response?.data || err.message);
   }
 }
 
-// ✅ Export All
 module.exports = {
+  findUserIdByEmail,
+  TABLE_IDS,
+  FIELD_IDS,
   logChatInteraction,
   logMeal,
   logWorkout,
   logSupplement,
   logSleep,
   logMood,
-  logReflection
+  logReflection,
 };
