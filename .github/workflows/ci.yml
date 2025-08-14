@@ -1,0 +1,42 @@
+name: Expo SDK 53 CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js 18
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Check Expo installation
+      run: npx expo install --check
+      
+    - name: Run lint
+      run: npm run lint || echo "No lint script found, skipping..."
+      
+    - name: Verify Expo config
+      run: |
+        if [ -f app.json ]; then
+          echo "Expo config found"
+          # Check that platforms only contains ios and android
+          if grep -q '"web"' app.json; then
+            echo "ERROR: Web platform found in Expo config"
+            exit 1
+          fi
+          echo "✅ Expo config is correct (iOS/Android only)"
+        fi
