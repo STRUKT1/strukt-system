@@ -1,58 +1,59 @@
-# System Architecture
+# STRUKT System Architecture
 
-This document provides a high‑level overview of the STRUKT System architecture, including component relationships, data flows, and integration patterns.
+This document provides a high-level and detailed overview of the STRUKT coaching platform architecture, including system components, data flows, and integration patterns.
 
-## High‑Level System Overview
+## System Overview
 
-The STRUKT System is a **stateless Node.js API** that serves as the backend for a conversational AI health coach. It integrates with external services (OpenAI, Airtable) to provide personalized health and fitness guidance.
+The STRUKT System is a **stateless Node.js/Express API** that powers an AI-driven health and fitness coach.  
+It integrates with OpenAI for conversational AI and Airtable for user data management, providing personalized health guidance through mobile and web clients.  
+The platform handles user interactions, personalizes coaching experiences, and tracks various health and fitness metrics.
 
 ### Core Architecture Principles
-
-- **Stateless Design**: No local database; relies on external services.
-- **Microservice‑Ready**: Modular structure with clear service boundaries.
-- **API‑First**: RESTful JSON API designed for mobile and web clients.
+- **Stateless Design**: No local database; relies entirely on external services.
+- **Microservice-Ready**: Modular structure with clear service boundaries.
+- **API-First**: RESTful JSON API designed for mobile and web clients.
 - **External Integration**: Uses proven external services for AI and storage.
-- **Conversation‑Driven**: AI chat is the primary user interface.
+- **Conversation-Driven**: AI chat is the primary user interface.
 
 ---
 
-## System Components (Component Diagram)
+## Component Diagram
 
 ```mermaid
 graph TD
     subgraph "Client Applications"
         Mobile[STRUKT Mobile App]
         Web[Web Interface]
-        APIClient[3rd‑Party Clients]
+        APIClient[3rd-Party Clients]
     end
 
     subgraph "STRUKT System API"
-        Server[Express Server<br/>server/index.js]
+        Server[Express Server]
 
         subgraph "API Layer"
-            Routes[Route Handlers<br/>routes/]
-            Middleware[Middleware<br/>middleware/]
+            Routes[Route Handlers]
+            Middleware[Middleware]
         end
 
         subgraph "Business Logic"
-            Controllers[Controllers<br/>controllers/]
+            Controllers[Controllers]
         end
 
         subgraph "Service Layer"
-            AIService[OpenAI Service<br/>services/openaiService.js]
-            MemoryService[Memory Service<br/>services/memoryService.js]
-            PersonalizeService[Personalization Service<br/>services/personalisationService.js]
-            LoggingUtils[Logging Utils<br/>utils/logging.js]
+            AIService[OpenAI Service]
+            MemoryService[Memory Service]
+            PersonalizeService[Personalization Service]
+            LoggingUtils[Logging Utilities]
         end
     end
 
     subgraph "External Services"
-        OpenAI[(OpenAI API<br/>GPT‑4o / GPT‑3.5)]
-        Airtable[(Airtable<br/>User Data & Logs)]
+        OpenAI[(OpenAI API<br/>GPT-4o / GPT-3.5)]
+        Airtable[(Airtable Database)]
     end
 
     subgraph "Configuration"
-        Prompts[System Prompts<br/>utils/prompts/]
+        Prompts[System Prompts]
         Env[Environment Variables]
     end
 
@@ -77,9 +78,16 @@ graph TD
     Server --> Middleware
     Middleware --> Routes
 
-Request Flow Architecture (Sequence Diagram)
-
-AI Chat Request Sequence
+    Airtable --> Users[Users Table]
+    Airtable --> Chat[Chat Interactions]
+    Airtable --> Meals[Meals Table]
+    Airtable --> Workouts[Workouts Table]
+    Airtable --> Sleep[Sleep Log]
+    Airtable --> Mood[Mood Log]
+    Airtable --> Plans[Custom Plans]
+    Airtable --> Progress[Progress Tracker]
+    
+    Sequence Diagram — AI Chat Request Flow
 
 sequenceDiagram
     participant Client as Mobile/Web Client
@@ -113,11 +121,11 @@ sequenceDiagram
     Note over Controller: Combine System + Personal + Memory prompts
     Controller->>+OpenAISvc: getAIReply(messagesWithContext)
 
-    OpenAISvc->>+OpenAI: Chat Completion (GPT‑4o)
+    OpenAISvc->>+OpenAI: Chat Completion (GPT-4o)
     alt Success
         OpenAI-->>-OpenAISvc: AI Response
     else Model Error
-        OpenAISvc->>+OpenAI: Fallback (GPT‑3.5‑turbo)
+        OpenAISvc->>+OpenAI: Fallback (GPT-3.5-turbo)
         OpenAI-->>-OpenAISvc: Fallback Response
     end
 
@@ -129,8 +137,32 @@ sequenceDiagram
 
     Controller-->>-API: {success: true, reply}
     API-->>-Client: JSON Response
+    
+    Core Services
 
-Data Architecture (ER Overview)
+OpenAI Service
+	•	Handles AI conversation generation
+	•	Manages system prompts and user context
+	•	Provides fallback models for reliability
+
+Personalization Service
+	•	Fetches user profiles from Airtable
+	•	Builds personalized prompts based on user preferences
+	•	Adapts AI responses to individual goals and context
+
+Memory Service
+	•	Retrieves recent chat history for context
+	•	Maintains conversation continuity
+	•	Enables the AI to reference past interactions
+
+Logging Utilities
+	•	Records all user interactions
+	•	Tracks meals, workouts, sleep, mood, and supplements
+	•	Provides structured data for AI analysis and coaching insights
+
+⸻
+
+Data Architecture (ER Diagram)
 
 erDiagram
     USERS ||--o{ CHAT_INTERACTIONS : has
@@ -140,172 +172,67 @@ erDiagram
     USERS ||--o{ MOOD : logs
     USERS ||--o{ SUPPLEMENTS : logs
     USERS ||--o{ REFLECTIONS : logs
-
-    USERS {
-        string id PK
-        string email
-        string goals
-        string dietary_needs
-        string medical_considerations
-        string preferences
-    }
-
-    CHAT_INTERACTIONS {
-        string id PK
-        string user_id FK
-        string message
-        string ai_response
-        string topic
-        datetime created
-    }
-
-    MEALS {
-        string id PK
-        string user_id FK
-        string name
-        string foods
-        number calories
-        number protein
-        number carbs
-        number fat
-        datetime created
-    }
-
-    WORKOUTS {
-        string id PK
-        string user_id FK
-        string name
-        number duration
-        string exercises
-        string intensity
-        string notes
-        datetime created
-    }
-
-Environment Configuration (Component Diagram)
-
-graph LR
-    subgraph "Environment Variables"
-        OpenAI_Key[OPENAI_API_KEY]
-        OpenAI_Project[OPENAI_PROJECT_ID]
-        OpenAI_Model[OPENAI_MODEL]
-        Airtable_Base[AIRTABLE_BASE_ID]
-        Airtable_Key[AIRTABLE_API_KEY]
-        Port[PORT]
-        Origins[ALLOWED_ORIGINS]
-    end
-
-    subgraph "Service Configuration"
-        OpenAI_Client[OpenAI Client]
-        Airtable_Client[Airtable Integration]
-        Server_Config[Express Server]
-        CORS_Config[CORS Middleware]
-    end
-
-    OpenAI_Key --> OpenAI_Client
-    OpenAI_Project --> OpenAI_Client
-    OpenAI_Model --> OpenAI_Client
-    Airtable_Base --> Airtable_Client
-    Airtable_Key --> Airtable_Client
-    Port --> Server_Config
-    Origins --> CORS_Config
-
-echnology Stack
-
-Runtime: Node.js, Express.js
-Package Manager: npm
-
-External Integrations
-	•	OpenAI API: GPT‑4o (primary) and GPT‑3.5‑turbo (fallback)
-	•	Airtable: User data, logs, and operational storage
-	•	Heroku (example): Deployment target (via app.json)
-
-Core Dependencies
-	•	axios (HTTP), joi (validation), helmet (security headers), cors,
-express-rate-limit (rate limiting), dotenv (env management)
-
-⸻
-
-Security Architecture (Layers)
-
-graph TD
-    subgraph "Client Request"
-        Request[HTTP Request]
-    end
-
-    subgraph "Security Middleware Stack"
-        RateLimit[Rate Limiting<br/>60 req/min per IP]
-        CORS[CORS Protection<br/>Configurable origins]
-        Helmet[Security Headers<br/>XSS/CSRF]
-        JSONParser[JSON Body Parser<br/>Size limits]
-        Validation[Input Validation<br/>Joi schemas]
-    end
-
-    subgraph "Business Logic"
-        Controllers[Controllers]
-    end
-
-    subgraph "External Services"
-        OpenAI_Secure[OpenAI API<br/>API Key Auth]
-        Airtable_Secure[Airtable<br/>Bearer Token Auth]
-    end
-
-    Request --> RateLimit --> CORS --> Helmet --> JSONParser --> Validation --> Controllers
-    Controllers --> OpenAI_Secure
-    Controllers --> Airtable_Secure
+    
+    Tables
+	•	Users: Member profiles, goals, and preferences
+	•	Chat Interactions: Conversation history and AI responses
+	•	Meals/Workouts/Sleep/Mood: Health and fitness tracking data
+	•	Custom Plans: AI-generated nutrition and workout plans
+	•	Progress Tracker: Weight, photos, and progress metrics
+  
+  Security Architecture
+  
+  graph TD
+    Request[HTTP Request] --> RateLimit[Rate Limiting]
+    RateLimit --> CORS[CORS Protection]
+    CORS --> Helmet[Security Headers]
+    Helmet --> JSONParser[JSON Body Parser]
+    JSONParser --> Validation[Input Validation]
+    Validation --> Controllers[Controllers]
+    Controllers --> OpenAI_Secure[OpenAI API (Key Auth)]
+    Controllers --> Airtable_Secure[Airtable (Bearer Token)]
 
 Security Considerations
-	•	Rate limiting, input validation, and strict CORS.
-	•	Secrets via environment variables (no secrets in code).
-	•	Public API with email‑based identification (no complex auth in this service).
+	•	API keys are managed through environment variables
+	•	Rate limiting is implemented for API protection
+	•	User data is validated before storage
+	•	Helmet.js provides additional security headers
 
 ⸻
 
 Deployment Architecture
-	•	Heroku (or similar PaaS) with:
-	•	app.json for app config
-	•	package.json start script
-	•	Env vars managed in provider
-	•	Stateless → horizontally scalable.
-	•	Single OpenAI client reused across requests.
+	•	Designed for stateless deployment on Heroku or similar PaaS
+	•	Uses app.json for app configuration
+	•	Environment variables managed in provider
+	•	Horizontally scalable
+	•	Single OpenAI client reused across requests
 
 ⸻
 
 Performance Characteristics
-
-Typical Response Times
-	•	Simple chat: ~200–500 ms
-	•	Context‑heavy chat: ~500–2000 ms
-	•	Data logging: ~100–300 ms
+	•	Simple chat: ~200–500 ms
+	•	Context-heavy chat: ~500–2000 ms
+	•	Data logging: ~100–300 ms
 
 Primary Bottlenecks
-	•	OpenAI latency (primary), Airtable latency (secondary), context building CPU.
+	•	OpenAI latency (primary)
+	•	Airtable latency (secondary)
+	•	Context building CPU load
 
 ⸻
 
 Integration Patterns
-	•	Circuit Breaker: Model fallback (GPT‑4o → GPT‑3.5).
-	•	Retries: Basic error handling (recommended to add exponential backoff).
-	•	Connection Reuse: Singleton clients for OpenAI and Airtable.
-	•	Structured Errors: Consistent error payloads.
+	•	Circuit Breaker: GPT-4o → GPT-3.5 fallback
+	•	Retries: Basic error handling (future: exponential backoff)
+	•	Connection Reuse: Singleton clients for OpenAI and Airtable
+	•	Structured Errors: Consistent error payloads
 
 ⸻
 
 Future Architecture Considerations
-
-Near‑Term
-	•	Response caching (e.g., Redis)
-	•	Background jobs/queues for non‑critical tasks
-	•	Health checks & APM
-
-Long‑Term
-	•	Split services (AI, data, user) into microservices
-	•	Event streaming for real‑time features
-	•	Edge deployments for lower latency
-	•	Migrate from Airtable to dedicated DB when needed
+	•	Near-Term: Response caching (Redis), background jobs/queues, health checks, APM
+	•	Long-Term: Split services into microservices, event streaming, edge deployments, migrate to dedicated DB
 
 ⸻
 
 Last Updated: August 2025
-
-
