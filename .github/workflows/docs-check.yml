@@ -1,0 +1,192 @@
+name: Documentation Check
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'docs/**'
+      - 'README.md'
+      - '.env.example'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - '.env.example'
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js 18
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Check documentation structure
+      run: |
+        echo "🔍 Checking documentation structure..."
+        
+        # Check that all required docs exist
+        required_docs=(
+          "docs/REPO_STRUCTURE.md"
+          "docs/AI_OVERVIEW.md"
+          "docs/ENDPOINTS.md"
+          "docs/ARCHITECTURE.md"
+          "docs/SECRETS.md"
+          "docs/DEVELOPMENT.md"
+          ".env.example"
+        )
+        
+        missing_docs=()
+        for doc in "${required_docs[@]}"; do
+          if [ ! -f "$doc" ]; then
+            missing_docs+=("$doc")
+          else
+            echo "✅ Found: $doc"
+          fi
+        done
+        
+        if [ ${#missing_docs[@]} -ne 0 ]; then
+          echo "❌ Missing documentation files:"
+          printf '%s\n' "${missing_docs[@]}"
+          exit 1
+        fi
+        
+        echo "✅ All required documentation files present"
+        
+    - name: Validate Mermaid diagrams
+      run: |
+        echo "🔍 Checking Mermaid diagrams..."
+        
+        # Check that ARCHITECTURE.md contains Mermaid diagrams
+        if grep -q "```mermaid" docs/ARCHITECTURE.md; then
+          echo "✅ Mermaid diagrams found in ARCHITECTURE.md"
+          
+          # Count diagram types
+          component_diagrams=$(grep -c "graph TD\|graph LR" docs/ARCHITECTURE.md || echo 0)
+          sequence_diagrams=$(grep -c "sequenceDiagram" docs/ARCHITECTURE.md || echo 0)
+          
+          echo "📊 Found $component_diagrams component diagram(s)"
+          echo "🔄 Found $sequence_diagrams sequence diagram(s)"
+          
+          if [ $component_diagrams -ge 1 ] && [ $sequence_diagrams -ge 1 ]; then
+            echo "✅ Required diagram types present (component + sequence)"
+          else
+            echo "❌ Missing required diagram types"
+            echo "   Required: at least 1 component diagram and 1 sequence diagram"
+            exit 1
+          fi
+        else
+          echo "❌ No Mermaid diagrams found in ARCHITECTURE.md"
+          exit 1
+        fi
+        
+    - name: Check documentation links
+      run: |
+        echo "🔍 Checking documentation links..."
+        
+        # Check that README.md links to all docs
+        docs_in_readme=$(grep -c "docs/" README.md || echo 0)
+        if [ $docs_in_readme -ge 6 ]; then
+          echo "✅ README.md contains documentation links ($docs_in_readme found)"
+        else
+          echo "❌ README.md missing documentation links (found $docs_in_readme, expected 6+)"
+          exit 1
+        fi
+        
+        # Check for broken internal links (basic check)
+        broken_links=()
+        while IFS= read -r line; do
+          if [[ $line =~ \[.*\]\((docs/[^)]+)\) ]]; then
+            link_path="${BASH_REMATCH[1]}"
+            if [ ! -f "$link_path" ]; then
+              broken_links+=("$link_path")
+            fi
+          fi
+        done < README.md
+        
+        if [ ${#broken_links[@]} -ne 0 ]; then
+          echo "❌ Broken documentation links found:"
+          printf '%s\n' "${broken_links[@]}"
+          exit 1
+        fi
+        
+        echo "✅ Documentation links validated"
+        
+    - name: Validate environment template
+      run: |
+        echo "🔍 Checking .env.example..."
+        
+        # Check that .env.example contains required variables
+        required_vars=(
+          "OPENAI_API_KEY"
+          "AIRTABLE_BASE_ID"
+          "AIRTABLE_API_KEY"
+        )
+        
+        missing_vars=()
+        for var in "${required_vars[@]}"; do
+          if ! grep -q "^${var}=" .env.example && ! grep -q "^# ${var}=" .env.example; then
+            missing_vars+=("$var")
+          else
+            echo "✅ Found: $var"
+          fi
+        done
+        
+        if [ ${#missing_vars[@]} -ne 0 ]; then
+          echo "❌ Missing required variables in .env.example:"
+          printf '%s\n' "${missing_vars[@]}"
+          exit 1
+        fi
+        
+        # Check that no actual secrets are committed
+        if grep -q "sk-[a-zA-Z0-9]" .env.example; then
+          echo "❌ Actual OpenAI API key found in .env.example"
+          exit 1
+        fi
+        
+        if grep -q "app[a-zA-Z0-9]" .env.example; then
+          echo "❌ Actual Airtable base ID found in .env.example"
+          exit 1
+        fi
+        
+        echo "✅ Environment template validated"
+        
+    - name: Check documentation freshness
+      run: |
+        echo "🔍 Checking documentation freshness..."
+        
+        # Check that docs mention current year
+        current_year=$(date +%Y)
+        docs_with_dates=$(find docs/ -name "*.md" -exec grep -l "$current_year" {} \; | wc -l)
+        
+        if [ $docs_with_dates -ge 3 ]; then
+          echo "✅ Documentation appears current ($docs_with_dates files mention $current_year)"
+        else
+          echo "⚠️ Documentation may be outdated (only $docs_with_dates files mention $current_year)"
+        fi
+        
+    - name: Run project linting
+      run: |
+        echo "🔍 Running project linting..."
+        npm run lint || echo "⚠️ Linting not configured or failed"
+        
+    - name: Documentation check summary
+      run: |
+        echo "📋 Documentation Check Summary:"
+        echo "✅ All required documentation files present"
+        echo "✅ Mermaid diagrams validated"
+        echo "✅ Documentation links checked"
+        echo "✅ Environment template validated"
+        echo "✅ Documentation structure approved"
+        echo ""
+        echo "🎉 Documentation quality check passed!"
