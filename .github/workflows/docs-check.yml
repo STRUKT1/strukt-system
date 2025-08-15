@@ -74,13 +74,11 @@ jobs:
             exit 1
           fi
 
-          # Ensure at least one fenced mermaid block exists
           if ! grep -q '```mermaid' "$FILE"; then
             echo '❌ No Mermaid diagrams found in ARCHITECTURE.md'
             exit 1
           fi
 
-          # Count expected diagram types
           component_diagrams=$(grep -Eci '^[[:space:]]*graph[[:space:]]+(TD|LR)\b' "$FILE" || true)
           sequence_diagrams=$(grep -Eci '^[[:space:]]*sequenceDiagram\b' "$FILE" || true)
 
@@ -95,6 +93,7 @@ jobs:
           echo '✅ Required diagram types present (component + sequence)'
 
       - name: Check documentation links
+        shell: bash
         run: |
           set -euo pipefail
           echo "🔍 Checking documentation links..."
@@ -107,20 +106,20 @@ jobs:
             exit 1
           fi
 
-          # Basic internal link check
-          broken_links=()
-          while IFS= read -r line; do
-            if [[ $line =~ $begin:math:display$.*$end:math:display$$begin:math:text$(docs/[^)]+)$end:math:text$ ]]; then
-              link_path="${BASH_REMATCH[1]}"
-              if [ ! -f "$link_path" ]; then
-                broken_links+=("$link_path")
-              fi
+          # Extract (docs/...) targets and check they exist
+          mapfile -t links < <(grep -oE '$begin:math:text$docs/[^)]+$end:math:text$' README.md | sed -E 's/^$begin:math:text$|$end:math:text$$//g')
+          broken=()
+          for p in "${links[@]}"; do
+            # strip any anchors like docs/file.md#section
+            file="${p%%#*}"
+            if [ ! -f "$file" ]; then
+              broken+=("$p")
             fi
-          done < README.md
+          done
 
-          if [ ${#broken_links[@]} -ne 0 ]; then
+          if [ ${#broken[@]} -ne 0 ]; then
             echo "❌ Broken documentation links found:"
-            printf '%s\n' "${broken_links[@]}"
+            printf '%s\n' "${broken[@]}"
             exit 1
           fi
 
