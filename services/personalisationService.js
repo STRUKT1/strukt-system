@@ -10,7 +10,7 @@
 
 const axios = require('axios');
 const { AIRTABLE_BASE_ID, AIRTABLE_API_KEY } = process.env;
-const USER_TABLE_ID = 'tbl87AICCbvbgrLCY';
+const { TABLE_IDS } = require('../utils/logging');
 
 const { findUserIdByEmail } = require('../utils/logging');
 
@@ -24,7 +24,7 @@ const { findUserIdByEmail } = require('../utils/logging');
 async function fetchUserData(email) {
   const userId = await findUserIdByEmail(email);
   if (!userId) return null;
-  const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${USER_TABLE_ID}/${userId}`;
+  const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.users}/${userId}`;
   const res = await axios.get(url, {
     headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
   });

@@ -38,6 +38,7 @@ const FIELD_IDS = {
     Message: 'fldgNRKet3scJ8PIe',
     AI_Response: 'fld3vU9nKXNmu6OZV',
     Topic: 'fld2eLzWRUnKNR7Im',
+    Created: 'fld1WNv8Oj0PU0ODt', // Auto-created timestamp
   },
   meals: {
     User: 'fldaTFIo8vKLoQYhS',
