@@ -1,0 +1,444 @@
+# Canonical Airtable Schema Specification for STRUKT System
+# This is the single source of truth for Airtable schema across strukt-system and strukt-app
+
+version: 1.0.0
+updated_at: 2025-08-16
+owner_repo: strukt-system
+
+# Environment variables required for Airtable integration
+environment:
+  AIRTABLE_BASE_ID:
+    description: "Airtable base identifier"
+    format: "app{12characters}"
+    required: true
+  AIRTABLE_API_KEY:
+    description: "Airtable API authentication token"
+    format: "pat{...} or key{...}"
+    required: true
+  ENABLE_AIRTABLE_SHADOW_WRITES:
+    description: "Enable shadow writes for safe field migration"
+    format: "true|false"
+    default: "true"
+    required: false
+
+tables:
+  users:
+    id: tbl87AICCbvbgrLCY
+    name: Users
+    description: "Stores user profiles, onboarding data, and preferences for personalization"
+    sync_direction: read_write
+    fields:
+      email_address:
+        id: fldgyVjQJc389lqNA
+        name: "Email Address"
+        type: email
+        required: true
+        unique: true
+        role: user_identifier
+        description: "Primary identifier for user lookup (case-insensitive)"
+      full_name:
+        name: "Full Name"
+        type: string
+        required: false
+        role: ai_context
+        description: "Used in all personalization"
+      gender_identity:
+        name: "Gender Identity"
+        type: single_select
+        required: false
+        role: ai_context
+      pronouns:
+        name: "Pronouns"
+        type: single_select
+        required: false
+        role: ai_context
+      date_of_birth:
+        name: "Date of Birth"
+        type: date
+        required: false
+        role: ai_context
+      body_type:
+        name: "Body Type"
+        type: single_select
+        required: false
+        role: ai_context
+      main_goal:
+        name: "Main Goal"
+        type: multi_select
+        required: false
+        role: ai_context
+      dietary_needs:
+        name: "Dietary Needs/Allergies"
+        type: long_text
+        required: false
+        role: ai_context_safety
+      medical_considerations:
+        name: "Medical Considerations"
+        type: long_text
+        required: false
+        role: ai_context_safety
+      preferred_coaching_tone:
+        name: "Preferred Coaching Tone"
+        type: single_select
+        required: false
+        role: ai_tone_modifier
+        description: "Used to set assistant voice"
+      vision_of_success:
+        name: "Vision of Success"
+        type: long_text
+        required: false
+        role: ai_context_motivational
+
+  chat:
+    id: tblDtOOmahkMYEqmy
+    name: "Chat Interactions"
+    description: "Stores conversation history between users and AI assistant"
+    sync_direction: write
+    fields:
+      name:
+        id: fldcHOwNiQlFpwuly
+        name: "Name"
+        type: string
+        required: true
+        role: system_use
+        description: "Auto-generated chat session identifier"
+      user:
+        id: fldDtbxnE1PyTleqo
+        name: "User"
+        type: link
+        link_table: users
+        required: true
+        role: relational
+        description: "Links to Users table"
+      message:
+        id: fldgNRKet3scJ8PIe
+        name: "Message"
+        type: long_text
+        required: true
+        role: ai_input_log
+        description: "User's input message"
+      ai_response:
+        id: fld3vU9nKXNmu6OZV
+        name: "AI Response"
+        type: long_text
+        required: true
+        role: ai_output_log
+        description: "Assistant's response"
+      topic:
+        id: fld2eLzWRUnKNR7Im
+        name: "Topic"
+        type: single_select
+        required: false
+        role: ai_context
+        description: "Auto-tagged conversation topic"
+      created:
+        id: fld1WNv8Oj0PU0ODt
+        name: "Created"
+        type: datetime
+        required: true
+        role: timestamp
+        description: "Auto-created timestamp for sorting"
+
+  meals:
+    id: tblWLkTKkxkSEcySD
+    name: "Meals"
+    description: "Nutrition tracking and meal logging"
+    sync_direction: write
+    fields:
+      user:
+        id: fldaTFIo8vKLoQYhS
+        name: "User"
+        type: link
+        link_table: users
+        required: true
+        role: relational
+      description:
+        id: fldLJXOsnTDqfp9mJ
+        name: "Description"
+        type: long_text
+        required: true
+        role: ai_input_log
+      calories:
+        id: fldUOPuN6n39Aj1v7
+        name: "Calories"
+        type: number
+        required: false
+        role: nutrition_data
+      protein:
+        id: fldbqKkHfEqmStvbn
+        name: "Protein"
+        type: number
+        required: false
+        role: nutrition_data
+      carbs:
+        id: fld8EvDjPVmY5vfhR
+        name: "Carbs"
+        type: number
+        required: false
+        role: nutrition_data
+      fats:
+        id: fldLnl83bsw9ZSCka
+        name: "Fats"
+        type: number
+        required: false
+        role: nutrition_data
+      meal_type:
+        id: fldoN35qBpJ2y7OFS
+        name: "MealType"
+        type: single_select
+        required: false
+        role: categorization
+      meal_source:
+        id: fld5DuMMbBBnYbCnS
+        name: "MealSource"
+        type: single_select
+        required: false
+        role: source_tracking
+        default: "AI-Estimated"
+
+  workouts:
+    id: tblgqvIqFetN2s23J
+    name: "Workouts"
+    description: "Exercise and fitness activity tracking"
+    sync_direction: write
+    fields:
+      user:
+        id: fldUuYZtmkiycOVnb
+        name: "User"
+        type: link
+        link_table: users
+        required: true
+        role: relational
+      date:
+        id: fldzVeaYTUHMxMDd9
+        name: "Date"
+        type: date
+        required: true
+        role: timestamp
+      type:
+        id: fld9xRDtOz1mBkDQ5
+        name: "Type"
+        type: single_select
+        required: false
+        role: categorization
+      description:
+        id: fldKkhKomMg3Cf108
+        name: "Description"
+        type: long_text
+        required: false
+        role: ai_input_log
+      duration:
+        id: fldaij5HlQKv8gMcT
+        name: "Duration"
+        type: number
+        required: false
+        role: fitness_data
+      calories:
+        id: fld2muGFVrfM0xHmI
+        name: "Calories"
+        type: number
+        required: false
+        role: fitness_data
+      notes:
+        id: fld1aEpGu5H8DWPxY
+        name: "Notes"
+        type: long_text
+        required: false
+        role: ai_input_log
+
+  supplements:
+    id: tblZ8F0Z8ZcMDYdej
+    name: "Supplements"
+    description: "Supplement intake tracking"
+    sync_direction: write
+    fields:
+      user:
+        id: fldzShNTWJornIZnP
+        name: "User"
+        type: link
+        link_table: users
+        required: true
+        role: relational
+      date:
+        id: fldQfsrapotczQaCY
+        name: "Date"
+        type: date
+        required: true
+        role: timestamp
+      time:
+        id: fldSherUQZmn2ts73
+        name: "Time"
+        type: string
+        required: false
+        role: timing_data
+      supplement_name:
+        id: fldad6mLDsXYMks5A
+        name: "SupplementName"
+        type: string
+        required: true
+        role: supplement_data
+      notes:
+        id: fldEoF1lbZoj3wPhO
+        name: "Notes"
+        type: long_text
+        required: false
+        role: ai_input_log
+      log_type:
+        id: fldzGOKvw0IF0Rbmn
+        name: "LogType"
+        type: single_select
+        required: false
+        role: source_tracking
+        default: "AI"
+      confirmed:
+        id: fldiqJbsxO4yx4JvB
+        name: "Confirmed"
+        type: checkbox
+        required: false
+        role: validation
+        default: true
+
+  sleep:
+    id: tblFepeTBkng3zDSY
+    name: "Sleep"
+    description: "Sleep pattern and quality tracking"
+    sync_direction: write
+    fields:
+      user:
+        id: fldabdr3bNgGqBawm
+        name: "User"
+        type: link
+        link_table: users
+        required: true
+        role: relational
+      date:
+        id: fldTvCL5QQ9g7fXfw
+        name: "Date"
+        type: date
+        required: true
+        role: timestamp
+      duration:
+        id: fldt7AKiAq2qfHs89
+        name: "Duration"
+        type: number
+        required: false
+        role: sleep_data
+      quality:
+        id: fldfdd8WYqyWx6Ckc
+        name: "Quality"
+        type: single_select
+        required: false
+        role: sleep_data
+      bedtime:
+        id: fldu544VmBsGIvEuw
+        name: "Bedtime"
+        type: string
+        required: false
+        role: sleep_data
+      wake_time:
+        id: fld43mo9Z09vYzoGb
+        name: "WakeTime"
+        type: string
+        required: false
+        role: sleep_data
+      notes:
+        id: fldzLiz85up5WqPAq
+        name: "Notes"
+        type: long_text
+        required: false
+        role: ai_input_log
+
+  mood:
+    id: tbltkNq7OSUcu4Xpp
+    name: "Mood"
+    description: "Mental health and mood tracking"
+    sync_direction: write
+    fields:
+      user:
+        id: flddOxxse2QJe6DMk
+        name: "User"
+        type: link
+        link_table: users
+        required: true
+        role: relational
+      date:
+        id: fldKVcXqCXvabybIb
+        name: "Date"
+        type: date
+        required: true
+        role: timestamp
+      mood:
+        id: fldUpnuuJRYIBy4mL
+        name: "Mood"
+        type: single_select
+        required: false
+        role: mood_data
+      notes:
+        id: fldFMbuWMrBlhScua
+        name: "Notes"
+        type: long_text
+        required: false
+        role: ai_input_log
+      energy:
+        id: fld6isxdyHYfjqsQM
+        name: "Energy"
+        type: single_select
+        required: false
+        role: mood_data
+      stress:
+        id: fldmLOpTwpzUc0F4Y
+        name: "Stress"
+        type: single_select
+        required: false
+        role: mood_data
+
+  reflections:
+    id: tblDrFwiJTYGjOfEv
+    name: "Reflections"
+    description: "Daily reflection entries for mental wellness"
+    sync_direction: write
+    fields:
+      user:
+        id: fldub69oCFo7ruloF
+        name: "User"
+        type: link
+        link_table: users
+        required: true
+        role: relational
+      date:
+        id: fldZibMunrMSu8iRC
+        name: "Date"
+        type: date
+        required: true
+        role: timestamp
+      went_well:
+        id: fldYpH7CM04KeDuT4
+        name: "WentWell"
+        type: long_text
+        required: false
+        role: reflection_data
+      challenge:
+        id: fldMeD609rZU7w8pI
+        name: "Challenge"
+        type: long_text
+        required: false
+        role: reflection_data
+      tomorrow:
+        id: fldmDUQ8fkYCYwCUG
+        name: "Tomorrow"
+        type: long_text
+        required: false
+        role: reflection_data
+      highlight:
+        id: fldmfnusmD5b4C6Dn
+        name: "Highlight"
+        type: long_text
+        required: false
+        role: reflection_data
+
+# Legacy field mappings for backward compatibility during migration
+deprecations:
+  tables:
+    # No table deprecations currently
+  fields:
+    # No field deprecations currently - all current field names are canonical

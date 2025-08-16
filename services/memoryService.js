@@ -10,9 +10,7 @@
 
 const axios = require('axios');
 const { AIRTABLE_BASE_ID, AIRTABLE_API_KEY } = process.env;
-
-// Airtable table ID for chat interactions
-const CHAT_TABLE_ID = 'tblDtOOmahkMYEqmy';
+const { TABLE_IDS, FIELD_IDS } = require('../utils/logging');
 
 /**
  * Retrieve the latest chat interactions for a user.  The returned
@@ -25,12 +23,12 @@ const CHAT_TABLE_ID = 'tblDtOOmahkMYEqmy';
  * @returns {Promise<Array<{ message: string, aiResponse: string }>>}
  */
 async function getRecentChatHistory(userEmail, limit = 5) {
-  const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${CHAT_TABLE_ID}`;
+  const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.chat}`;
   const res = await axios.get(url, {
     headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
     params: {
       filterByFormula: `{Email Address} = '${userEmail}'`,
-      sort: '[{"field":"fld1WNv8Oj0PU0ODt","direction":"desc"}]',
+      sort: `[{"field":"${FIELD_IDS.chat.Created}","direction":"desc"}]`,
       maxRecords: limit,
     },
   });

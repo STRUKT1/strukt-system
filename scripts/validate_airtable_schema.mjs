@@ -5,11 +5,13 @@
  * 
  * This script validates the Airtable schema consistency between:
  * 1. Local code field usage (from field mapping)
- * 2. Airtable Meta API (when credentials are available)
+ * 2. Canonical schema specification (schema/AIRTABLE_SPEC.yaml)
+ * 3. Airtable Meta API (when credentials are available)
  * 
  * Modes:
  * - Dry-run (default): Validates local mapping consistency only
  * - Live validation: Checks against actual Airtable base when credentials present
+ * - Spec validation: Validates code against canonical schema spec
  */
 
 import fs from 'fs';
@@ -24,6 +26,7 @@ const CONFIG = {
   dryRun: !process.env.AIRTABLE_BASE_ID || !process.env.AIRTABLE_API_KEY,
   verbose: process.env.VERBOSE === '1' || process.argv.includes('--verbose'),
   validateAirtable: process.env.VALIDATE_AIRTABLE === '1',
+  validateSpec: true, // Always validate against spec
 };
 
 // Expected schema from local codebase
@@ -239,6 +242,62 @@ class AirtableValidator {
     }
   }
 
+  /**
+   * Validate that code references match the canonical specification
+   */
+  async validateAgainstSpec() {
+    this.log('info', 'Validating against canonical schema specification...');
+
+    try {
+      // Try to load the adapter
+      const adapterPath = path.join(__dirname, '../src/schema/airtableAdapter.js');
+      if (!fs.existsSync(adapterPath)) {
+        this.log('warn', 'Schema adapter not found, skipping spec validation');
+        return true;
+      }
+
+      // Load spec file directly
+      const specPath = path.join(__dirname, '../schema/AIRTABLE_SPEC.yaml');
+      if (!fs.existsSync(specPath)) {
+        this.log('warn', 'Schema specification not found, skipping spec validation');
+        return true;
+      }
+
+      this.log('success', 'Schema specification file found');
+
+      // Import adapter module using dynamic import for ES modules
+      const { createRequire } = await import('module');
+      const require = createRequire(import.meta.url);
+      
+      try {
+        const { adapter } = require(adapterPath);
+        
+        // Validate spec can be loaded
+        const version = adapter.getVersion();
+        this.log('success', `Schema spec loaded: v${version.version} (${version.updated_at})`);
+
+        // Check that adapter can resolve table and field references
+        for (const tableName of Object.keys(EXPECTED_SCHEMA.tables)) {
+          try {
+            const tableId = adapter.getTableId(tableName);
+            this.log('success', `Adapter resolves table: ${tableName} -> ${tableId}`);
+          } catch (error) {
+            this.log('error', `Adapter cannot resolve table: ${tableName}`, error.message);
+          }
+        }
+
+        return true;
+      } catch (adapterError) {
+        this.log('warn', 'Could not load adapter module', adapterError.message);
+        return true; // Non-critical for now
+      }
+
+    } catch (error) {
+      this.log('warn', 'Failed to validate against spec (non-critical)', error.message);
+      return true; // Non-critical failure
+    }
+  }
+
   async validateAirtableAPI() {
     if (!process.env.AIRTABLE_BASE_ID || !process.env.AIRTABLE_API_KEY) {
       this.log('info', 'Skipping Airtable API validation - credentials not provided');
@@ -368,11 +427,18 @@ async function main() {
   console.log(`Mode: ${CONFIG.dryRun ? 'Dry-run' : 'Live validation'}`);
   console.log(`Verbose: ${CONFIG.verbose}`);
   console.log(`Force Airtable validation: ${CONFIG.validateAirtable}`);
+  console.log(`Spec validation: ${CONFIG.validateSpec}`);
 
   const validator = new AirtableValidator();
 
   // Always run local validation
   const localValid = validator.validateLocalSchema();
+
+  // Validate against canonical spec if available
+  let specValid = true;
+  if (CONFIG.validateSpec) {
+    specValid = await validator.validateAgainstSpec();
+  }
 
   // Run live validation if credentials are available or forced
   let remoteValid = true;
@@ -384,7 +450,7 @@ async function main() {
   validator.generateReport();
 
   // Exit with appropriate code
-  const success = localValid && remoteValid && validator.errors.length === 0;
+  const success = localValid && specValid && remoteValid && validator.errors.length === 0;
   process.exit(success ? 0 : 1);
 }
 
