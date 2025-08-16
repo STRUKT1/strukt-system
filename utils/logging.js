@@ -9,12 +9,19 @@
  * provided: `AIRTABLE_BASE_ID` and `AIRTABLE_API_KEY`.  Table and field
  * identifiers should be kept in sync with your Airtable base.  If new
  * tables/fields are added, update the TABLE_IDS and FIELD_IDS objects.
+ * 
+ * SHADOW WRITES: The system supports shadow writes for safe field migrations.
+ * When ENABLE_AIRTABLE_SHADOW_WRITES=true (default), writes will include
+ * both canonical and legacy field names where deprecations exist.
  */
 
 const axios = require('axios');
 
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
+
+// Shadow write feature flag (enabled by default for safe migrations)
+const ENABLE_SHADOW_WRITES = process.env.ENABLE_AIRTABLE_SHADOW_WRITES !== 'false';
 
 // ✅ Table IDs
 const TABLE_IDS = {
@@ -96,6 +103,45 @@ const FIELD_IDS = {
 };
 
 /**
+ * Apply shadow writes to a payload if enabled.
+ * For now, this is a pass-through since we don't have active deprecations.
+ * When field deprecations are added to the spec, this function will duplicate
+ * field values to both canonical and legacy field names.
+ * 
+ * @param {string} tableName - The table being written to
+ * @param {Object} payload - The field payload to potentially shadow
+ * @returns {Object} - Payload with shadow writes applied
+ */
+function applyShadowWrites(tableName, payload) {
+  if (!ENABLE_SHADOW_WRITES) {
+    return payload;
+  }
+
+  // For now, return as-is since we don't have active deprecations
+  // Future enhancement: Load deprecations from adapter and duplicate fields
+  // Example:
+  // if (tableName === 'users' && payload[FIELD_IDS.users.NewField]) {
+  //   payload[FIELD_IDS.users.LegacyField] = payload[FIELD_IDS.users.NewField];
+  // }
+  
+  return payload;
+}
+
+/**
+ * Map incoming record data from legacy format to canonical format.
+ * For now, this is a pass-through since we don't have active deprecations.
+ * 
+ * @param {string} tableName - The table being read from
+ * @param {Object} record - The record data from Airtable
+ * @returns {Object} - Record with canonical field mapping applied
+ */
+function mapIncomingRecord(tableName, record) {
+  // For now, return as-is since we don't have active deprecations
+  // Future enhancement: Map legacy field names to canonical names
+  return record;
+}
+
+/**
  * Find a user record ID in Airtable given their email address.
  *
  * @param {string} email User’s email address
@@ -124,17 +170,20 @@ async function logChatInteraction(email, topic, message, aiReply) {
   const userId = await findUserIdByEmail(email);
   if (!userId) return;
   try {
+    let fields = {
+      [FIELD_IDS.chat.Name]: `Chat – ${new Date().toLocaleString()}`,
+      [FIELD_IDS.chat.User]: [userId],
+      [FIELD_IDS.chat.Message]: message,
+      [FIELD_IDS.chat.AI_Response]: aiReply,
+      [FIELD_IDS.chat.Topic]: topic || 'Other',
+    };
+
+    // Apply shadow writes for safe field migrations
+    fields = applyShadowWrites('chat', fields);
+
     await axios.post(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_IDS.chat}`,
-      {
-        fields: {
-          [FIELD_IDS.chat.Name]: `Chat – ${new Date().toLocaleString()}`,
-          [FIELD_IDS.chat.User]: [userId],
-          [FIELD_IDS.chat.Message]: message,
-          [FIELD_IDS.chat.AI_Response]: aiReply,
-          [FIELD_IDS.chat.Topic]: topic || 'Other',
-        },
-      },
+      { fields },
       {
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
@@ -142,7 +191,7 @@ async function logChatInteraction(email, topic, message, aiReply) {
         },
       },
     );
-    console.log(`✅ Chat logged for ${email}`);
+    console.log(`✅ Chat logged for ${email}${ENABLE_SHADOW_WRITES ? ' (shadow writes enabled)' : ''}`);
   } catch (err) {
     console.error('❌ Chat logging failed', err?.response?.data || err.message);
   }
@@ -356,4 +405,8 @@ module.exports = {
   logSleep,
   logMood,
   logReflection,
+  // Shadow write utilities
+  applyShadowWrites,
+  mapIncomingRecord,
+  ENABLE_SHADOW_WRITES,
 };
