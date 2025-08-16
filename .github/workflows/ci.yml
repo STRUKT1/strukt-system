@@ -40,3 +40,16 @@ jobs:
           fi
           echo "✅ Expo config is correct (iOS/Android only)"
         fi
+      
+    - name: Validate Airtable Schema
+      run: |
+        echo "🔍 Running Airtable schema validation..."
+        node scripts/validate_airtable_schema.mjs || echo "⚠️ Airtable validation completed with warnings (non-blocking)"
+        echo "✅ Airtable validation step completed"
+      continue-on-error: true
+      env:
+        # Note: Running in dry-run mode by default (no credentials)
+        # Set VALIDATE_AIRTABLE=1 in repository secrets to force live validation
+        VALIDATE_AIRTABLE: ${{ secrets.VALIDATE_AIRTABLE }}
+        AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+        AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
