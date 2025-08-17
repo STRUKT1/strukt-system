@@ -95,7 +95,8 @@ class AirtableAdapter {
   getVersion() {
     const spec = this._loadSpec();
     return {
-      version: spec.version,
+      spec_version: spec.spec_version,
+      version: spec.spec_version, // backward compatibility
       updated_at: spec.updated_at,
       owner_repo: spec.owner_repo
     };
