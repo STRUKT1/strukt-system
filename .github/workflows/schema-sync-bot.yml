@@ -15,12 +15,21 @@ on:
 jobs:
   sync-to-strukt-app:
     runs-on: ubuntu-latest
+
+    # Needed for cloning/pushing and opening PRs
     permissions:
       contents: write
       pull-requests: write
+
+    # Use PAT if provided, otherwise GitHub token
+    env:
+      GH_TOKEN: ${{ secrets.STRUKT_APP_PAT || secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout strukt-system
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check if sync is disabled
         run: |
@@ -32,16 +41,15 @@ jobs:
       - name: Prepare sync metadata
         id: prep
         run: |
+          set -e
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
           BRANCH="bot/schema-sync-$TIMESTAMP"
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
           echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
-          
-          # Get current schema hash and metadata
+
           SCHEMA_HASH=$(sha256sum schema/AIRTABLE_SPEC.yaml | awk '{print $1}')
           echo "schema_hash=$SCHEMA_HASH" >> $GITHUB_OUTPUT
-          
-          # Extract version info for PR description
+
           if command -v yq >/dev/null 2>&1; then
             SPEC_VERSION=$(yq '.spec_version // .version' schema/AIRTABLE_SPEC.yaml 2>/dev/null || echo "unknown")
             UPDATED_AT=$(yq '.updated_at' schema/AIRTABLE_SPEC.yaml 2>/dev/null || echo "unknown")
@@ -49,24 +57,25 @@ jobs:
             SPEC_VERSION=$(grep -E "^(spec_)?version:" schema/AIRTABLE_SPEC.yaml | head -1 | sed 's/.*: *//' || echo "unknown")
             UPDATED_AT=$(grep "updated_at:" schema/AIRTABLE_SPEC.yaml | sed 's/.*: *//' || echo "unknown")
           fi
-          
           echo "spec_version=$SPEC_VERSION" >> $GITHUB_OUTPUT
           echo "updated_at=$UPDATED_AT" >> $GITHUB_OUTPUT
 
-      - name: Check for existing PR
+      - name: Configure Git identity
+        run: |
+          git config --global user.name "strukt-bot"
+          git config --global user.email "bot@strukt.ai"
+
+      - name: Check for existing PR in strukt-app
         id: existing_pr
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}
         run: |
           set -e
-          
-          # Check if there's already an open PR for schema sync
           EXISTING_PR=$(gh pr list -R STRUKT1/strukt-app \
             --state open \
             --label "schema-sync" \
             --json number,title,headRefName \
             --jq '.[] | select(.title | contains("chore(schema): sync AIRTABLE_SPEC")) | .number' | head -1 || echo "")
-          
           if [[ -n "$EXISTING_PR" ]]; then
             echo "existing_pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
             echo "has_existing_pr=true" >> $GITHUB_OUTPUT
@@ -76,164 +85,120 @@ jobs:
             echo "📋 No existing sync PR found"
           fi
 
-      - name: Setup Git configuration
-        run: |
-          git config --global user.name "strukt-bot"
-          git config --global user.email "bot@strukt.ai"
-
       - name: Clone strukt-app and sync schema
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}
         run: |
           set -e
-          
-          # Create temporary directory
           TEMP_DIR=$(mktemp -d)
           cd "$TEMP_DIR"
-          
-          # Clone target repository
+
           echo "🔄 Cloning strukt-app repository..."
           git clone "https://x-access-token:${GH_TOKEN}@github.com/STRUKT1/strukt-app.git" app
           cd app
-          
-          # Create schema directory if it doesn't exist
           mkdir -p schema
-          
-          # Check if schema already matches (avoid unnecessary PRs)
+
+          # Skip if identical (unless force_sync)
           if [[ -f schema/AIRTABLE_SPEC.yaml ]]; then
             CURRENT_HASH=$(sha256sum schema/AIRTABLE_SPEC.yaml | awk '{print $1}')
             if [[ "$CURRENT_HASH" == "${{ steps.prep.outputs.schema_hash }}" && "${{ inputs.force_sync }}" != "true" ]]; then
               echo "✅ Schema is already up to date (hash: $CURRENT_HASH)"
-              echo "No sync needed unless force_sync is enabled"
               exit 0
             fi
           fi
-          
-          # Copy the schema file
+
           echo "📄 Copying schema from strukt-system..."
           cp "${{ github.workspace }}/schema/AIRTABLE_SPEC.yaml" schema/AIRTABLE_SPEC.yaml
-          
-          # Check if there are any changes
+
+          # If nothing actually changed and not forcing, stop
           if git diff --quiet schema/AIRTABLE_SPEC.yaml 2>/dev/null; then
             echo "✅ No changes detected in schema file"
             if [[ "${{ inputs.force_sync }}" != "true" ]]; then
-              echo "Skipping PR creation"
               exit 0
             fi
           fi
-          
-          # Create or checkout branch
+
           BRANCH="${{ steps.prep.outputs.branch }}"
           if [[ "${{ steps.existing_pr.outputs.has_existing_pr }}" == "true" ]]; then
-            # Update existing PR branch
             EXISTING_BRANCH=$(gh pr view ${{ steps.existing_pr.outputs.existing_pr_number }} --json headRefName --jq '.headRefName')
             git checkout -b "$EXISTING_BRANCH" origin/"$EXISTING_BRANCH" 2>/dev/null || git checkout -b "$EXISTING_BRANCH"
             BRANCH="$EXISTING_BRANCH"
           else
             git checkout -b "$BRANCH"
           fi
-          
-          # Stage and commit changes
+
           git add schema/AIRTABLE_SPEC.yaml
-          
           COMMIT_MSG="chore(schema): sync AIRTABLE_SPEC from strukt-system
-          
+
           Auto-sync schema changes from STRUKT1/strukt-system@${{ github.sha }}
-          
+
           Schema version: ${{ steps.prep.outputs.spec_version }}
           Updated: ${{ steps.prep.outputs.updated_at }}
           Hash: ${{ steps.prep.outputs.schema_hash }}"
-          
-          git commit -m "$COMMIT_MSG"
-          
-          # Push changes
+          git commit -m "$COMMIT_MSG" || echo "Nothing to commit (might be force_sync path)"
+
           echo "⬆️ Pushing changes to $BRANCH..."
-          git push -u origin "$BRANCH"
-          
-          # Store temp directory path for later use
+          git push -u origin "$BRANCH" || echo "No changes to push"
+
           echo "$TEMP_DIR" > /tmp/temp_dir_path
 
       - name: Create or update PR
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}
         run: |
           set -e
-          
-          # Get temp directory path
           TEMP_DIR=$(cat /tmp/temp_dir_path)
           cd "$TEMP_DIR/app"
-          
-          # Create PR body
+
           PR_BODY="## 🔄 Automated Schema Sync from strukt-system
-          
+
           This PR automatically syncs the Airtable schema specification from the source of truth repository.
-          
+
           ### 📊 Schema Details
           - **Source**: STRUKT1/strukt-system@${{ github.sha }}
           - **Version**: ${{ steps.prep.outputs.spec_version }}
           - **Updated**: ${{ steps.prep.outputs.updated_at }}
           - **Hash**: \`${{ steps.prep.outputs.schema_hash }}\`
-          
+
           ### 🔍 Changes Summary
-          This PR updates \`schema/AIRTABLE_SPEC.yaml\` to match the latest version from strukt-system.
-          
+          Updates \`schema/AIRTABLE_SPEC.yaml\` to the latest version from strukt-system.
+
           ### ✅ Validation Checklist
           - [ ] Schema format is valid
           - [ ] No breaking changes to existing field IDs
           - [ ] All table references are maintained
           - [ ] Version information is updated
-          
-          ### 🚀 Next Steps
-          1. Review the schema changes carefully
-          2. Ensure any code changes in strukt-app are compatible
-          3. Run local tests if available
-          4. Merge when ready
-          
-          ### 🛠️ Manual Override
-          If this sync is not needed, you can:
-          - Close this PR and set \`SCHEMA_SYNC_DISABLED=true\` in repository secrets
-          - Or manually sync later using the [manual sync guide](../blob/main/docs/SCHEMA_SYNC.md)
-          
-          ---
-          *This PR was automatically created by the schema sync bot. For questions, see the [Schema Sync Documentation](../blob/main/docs/SCHEMA_SYNC.md).*"
-          
+          "
+
           if [[ "${{ steps.existing_pr.outputs.has_existing_pr }}" == "true" ]]; then
-            # Update existing PR
             echo "📝 Updating existing PR #${{ steps.existing_pr.outputs.existing_pr_number }}..."
             gh pr edit ${{ steps.existing_pr.outputs.existing_pr_number }} \
               --body "$PR_BODY" \
               --title "chore(schema): sync AIRTABLE_SPEC from strukt-system (${{ steps.prep.outputs.spec_version }})"
-            
-            echo "✅ Updated existing PR: https://github.com/STRUKT1/strukt-app/pull/${{ steps.existing_pr.outputs.existing_pr_number }}"
+            echo "✅ Updated existing PR"
           else
-            # Create new PR
             echo "📝 Creating new PR..."
-            PR_URL=$(gh pr create \
+            gh pr create \
+              --repo STRUKT1/strukt-app \
+              --base main \
               --title "chore(schema): sync AIRTABLE_SPEC from strukt-system (${{ steps.prep.outputs.spec_version }})" \
               --body "$PR_BODY" \
               --label "schema-sync,bot,safe-to-merge" \
-              --assignee "@me")
-            
-            echo "✅ Created new PR: $PR_URL"
+              --assignee "@me" || echo "⚠️ PR may already exist"
           fi
 
       - name: Run optional validation
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}
         run: |
           set -e
-          
-          # Get temp directory path
           TEMP_DIR=$(cat /tmp/temp_dir_path)
           cd "$TEMP_DIR/app"
-          
-          # Check if strukt-app has validation script
           if [[ -f "scripts/validate_airtable_schema.mjs" ]]; then
             echo "🧪 Running validation script in strukt-app..."
             if command -v node >/dev/null 2>&1; then
               node scripts/validate_airtable_schema.mjs --dry-run || {
-                echo "⚠️ Validation script failed, but continuing with sync"
-                echo "Please review the PR carefully"
+                echo "⚠️ Validation script failed, continuing"
               }
             else
               echo "⚠️ Node.js not available, skipping validation"
@@ -245,13 +210,10 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          # Clean up temporary directory
           if [[ -f /tmp/temp_dir_path ]]; then
             TEMP_DIR=$(cat /tmp/temp_dir_path)
-            if [[ -d "$TEMP_DIR" ]]; then
-              rm -rf "$TEMP_DIR"
-            fi
-            rm -f /tmp/temp_dir_path
+            rm -rf "$TEMP_DIR" || true
+            rm -f /tmp/temp_dir_path || true
           fi
 
       - name: Summary
@@ -264,17 +226,8 @@ jobs:
           echo "- **Schema Version**: ${{ steps.prep.outputs.spec_version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Schema Hash**: \`${{ steps.prep.outputs.schema_hash }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Timestamp**: ${{ steps.prep.outputs.timestamp }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
           if [[ "${{ steps.existing_pr.outputs.has_existing_pr }}" == "true" ]]; then
             echo "### ♻️ Updated Existing PR" >> $GITHUB_STEP_SUMMARY
-            echo "Updated PR #${{ steps.existing_pr.outputs.existing_pr_number }} in strukt-app with latest schema changes." >> $GITHUB_STEP_SUMMARY
           else
             echo "### 🆕 Created New PR" >> $GITHUB_STEP_SUMMARY
-            echo "Created new PR in strukt-app for schema sync." >> $GITHUB_STEP_SUMMARY
           fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
-          echo "- [strukt-app Repository](https://github.com/STRUKT1/strukt-app)" >> $GITHUB_STEP_SUMMARY
-          echo "- [Schema Sync Documentation](docs/SCHEMA_SYNC.md)" >> $GITHUB_STEP_SUMMARY
