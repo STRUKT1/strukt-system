@@ -21,7 +21,7 @@ jobs:
       contents: write
       pull-requests: write
 
-    # Use PAT if provided, otherwise GitHub token
+    # Use a PAT if provided, otherwise fall back to the built-in GitHub token
     env:
       GH_TOKEN: ${{ secrets.STRUKT_APP_PAT || secrets.GITHUB_TOKEN }}
 
@@ -65,6 +65,13 @@ jobs:
           git config --global user.name "strukt-bot"
           git config --global user.email "bot@strukt.ai"
 
+      - name: Authenticate gh
+        env:
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+        run: |
+          echo "${GH_TOKEN}" | gh auth login --with-token
+          gh auth status
+
       - name: Check for existing PR in strukt-app
         id: existing_pr
         env:
@@ -96,6 +103,10 @@ jobs:
           echo "🔄 Cloning strukt-app repository..."
           git clone "https://x-access-token:${GH_TOKEN}@github.com/STRUKT1/strukt-app.git" app
           cd app
+
+          # Make sure pushes use the tokenized remote
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/STRUKT1/strukt-app.git"
+
           mkdir -p schema
 
           # Skip if identical (unless force_sync)
