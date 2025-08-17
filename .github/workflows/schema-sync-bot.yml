@@ -70,6 +70,7 @@ jobs:
           GH_TOKEN: ${{ env.GH_TOKEN }}
         run: |
           echo "${GH_TOKEN}" | gh auth login --with-token
+          unset GH_TOKEN
           gh auth status
 
       - name: Check for existing PR in strukt-app
