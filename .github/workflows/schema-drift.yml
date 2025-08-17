@@ -84,14 +84,14 @@ jobs:
               PEER_OWNER="missing"
             fi
           else
-            LOCAL_VERSION=$(grep -E "^(spec_)?version:" schema/AIRTABLE_SPEC.yaml | head -1 | sed 's/.*: *//' || echo "unknown")
-            LOCAL_UPDATED=$(grep "updated_at:" schema/AIRTABLE_SPEC.yaml | sed 's/.*: *//' || echo "unknown")
-            LOCAL_OWNER=$(grep "owner_repo:" schema/AIRTABLE_SPEC.yaml | sed 's/.*: *//' || echo "unknown")
+            LOCAL_VERSION=$(grep -E "^(spec_)?version:" schema/AIRTABLE_SPEC.yaml | head -1 | cut -d: -f2- | sed 's/^ *//' || echo "unknown")
+            LOCAL_UPDATED=$(grep "^updated_at:" schema/AIRTABLE_SPEC.yaml | cut -d: -f2- | sed 's/^ *//' || echo "unknown")
+            LOCAL_OWNER=$(grep "^owner_repo:" schema/AIRTABLE_SPEC.yaml | cut -d: -f2- | sed 's/^ *//' || echo "unknown")
             
             if [[ -s .schema/peer.yaml ]]; then
-              PEER_VERSION=$(grep -E "^(spec_)?version:" .schema/peer.yaml | head -1 | sed 's/.*: *//' || echo "unknown")
-              PEER_UPDATED=$(grep "updated_at:" .schema/peer.yaml | sed 's/.*: *//' || echo "unknown")
-              PEER_OWNER=$(grep "owner_repo:" .schema/peer.yaml | sed 's/.*: *//' || echo "unknown")
+              PEER_VERSION=$(grep -E "^(spec_)?version:" .schema/peer.yaml | head -1 | cut -d: -f2- | sed 's/^ *//' || echo "unknown")
+              PEER_UPDATED=$(grep "^updated_at:" .schema/peer.yaml | cut -d: -f2- | sed 's/^ *//' || echo "unknown")
+              PEER_OWNER=$(grep "^owner_repo:" .schema/peer.yaml | cut -d: -f2- | sed 's/^ *//' || echo "unknown")
             else
               PEER_VERSION="missing"
               PEER_UPDATED="missing"

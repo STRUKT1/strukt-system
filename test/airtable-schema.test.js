@@ -63,6 +63,34 @@ function testAdapter() {
   }
 }
 
+// Test schema version format
+function testSchemaVersionFormat() {
+  console.log('🧪 Testing Schema Version Format...');
+  
+  try {
+    const { adapter } = require('../src/schema/airtableAdapter.js');
+    
+    // Test version info includes spec_version
+    const version = adapter.getVersion();
+    assert(version.spec_version, 'Should have spec_version field');
+    assert(version.spec_version.startsWith('v'), 'spec_version should start with v');
+    assert(version.owner_repo === 'STRUKT1/strukt-system', 'Expected owner_repo to be STRUKT1/strukt-system');
+    assert(version.updated_at.includes('T'), 'updated_at should be ISO8601 format');
+    console.log('✅ Schema version format is correct');
+    
+    // Test backward compatibility
+    assert(version.version === version.spec_version, 'Should provide backward compatibility');
+    console.log('✅ Backward compatibility maintained');
+    
+    console.log('🎉 All schema version format tests passed!');
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Schema version format test failed:', error.message);
+    return false;
+  }
+}
+
 // Test shadow write utilities
 function testShadowWrites() {
   console.log('🧪 Testing Shadow Write Utilities...');
@@ -129,6 +157,7 @@ function runAllTests() {
   
   const results = [
     testSchemaSpec(),
+    testSchemaVersionFormat(),
     testAdapter(),
     testShadowWrites()
   ];
@@ -156,5 +185,6 @@ module.exports = {
   testAdapter,
   testShadowWrites,
   testSchemaSpec,
+  testSchemaVersionFormat,
   runAllTests
 };
