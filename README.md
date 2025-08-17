@@ -56,6 +56,26 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 | [Usage Guide](docs/USAGE.md) | How to use the platform effectively |
 | [Contributing](docs/CONTRIBUTING.md) | Guidelines for contributors |
 | [Changelog](docs/CHANGELOG.md) | Version history and updates |
+| [**Schema Sync**](docs/SCHEMA_SYNC.md) | **Cross-repo schema drift detection & sync** |
+
+---
+
+## Schema Sync System
+
+[![Schema Drift](https://github.com/STRUKT1/strukt-system/actions/workflows/schema-drift.yml/badge.svg)](https://github.com/STRUKT1/strukt-system/actions/workflows/schema-drift.yml)
+[![Schema Sync Bot](https://github.com/STRUKT1/strukt-system/actions/workflows/schema-sync-bot.yml/badge.svg)](https://github.com/STRUKT1/strukt-system/actions/workflows/schema-sync-bot.yml)
+
+This repository serves as the **source of truth** for the Airtable schema (`schema/AIRTABLE_SPEC.yaml`). Changes here automatically sync to `STRUKT1/strukt-app` via automated workflows.
+
+- 🔍 **Drift Detection**: Automatically detects schema differences between repositories
+- 🤖 **Auto-Sync**: Creates PRs in strukt-app when schema changes
+- 📝 **PR Comments**: Provides clear feedback during development
+- 🚨 **SoT Enforcement**: Prevents schema drift in the source repository
+
+**Quick Links:**
+- [📖 Schema Sync Guide](docs/SCHEMA_SYNC.md) - Complete setup and usage
+- [🔧 Schema Validation](docs/SCHEMA_SYNC_VALIDATION.md) - Validation reports
+- [📋 Airtable Spec Guide](docs/AIRTABLE_SPEC_README.md) - Schema documentation
 
 ---
 

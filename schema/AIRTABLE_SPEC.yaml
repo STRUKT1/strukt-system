@@ -1,9 +1,9 @@
 # Canonical Airtable Schema Specification for STRUKT System
 # This is the single source of truth for Airtable schema across strukt-system and strukt-app
 
-version: 1.0.0
-updated_at: 2025-08-16
-owner_repo: strukt-system
+spec_version: v1.0.0
+updated_at: 2025-08-17T19:50:00Z
+owner_repo: STRUKT1/strukt-system
 
 # Environment variables required for Airtable integration
 environment:

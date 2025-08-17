@@ -17,8 +17,8 @@ function testAdapter() {
     
     // Test version info
     const version = adapter.getVersion();
-    assert(version.version === '1.0.0', 'Expected version 1.0.0');
-    assert(version.owner_repo === 'strukt-system', 'Expected owner_repo to be strukt-system');
+    assert(version.spec_version === 'v1.0.0', 'Expected spec_version v1.0.0');
+    assert(version.owner_repo === 'STRUKT1/strukt-system', 'Expected owner_repo to be STRUKT1/strukt-system');
     console.log('✅ Version info loaded correctly');
     
     // Test table ID resolution
@@ -110,7 +110,7 @@ function testSchemaSpec() {
     // Test file is readable
     const content = fs.readFileSync(specPath, 'utf-8');
     assert(content.length > 0, 'Schema spec should have content');
-    assert(content.includes('version:'), 'Should contain version field');
+    assert(content.includes('spec_version:'), 'Should contain spec_version field');
     assert(content.includes('tables:'), 'Should contain tables section');
     console.log('✅ Schema spec file is readable and has expected structure');
     
