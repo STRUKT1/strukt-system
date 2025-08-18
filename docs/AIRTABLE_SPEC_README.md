@@ -149,22 +149,40 @@ The validation script is integrated into CI pipelines:
 - **strukt-system**: Validates that code matches spec
 - **strukt-app**: Warns if spec version differs from strukt-system main branch
 
-## Cross-Repository Sync Process
+## Manual Schema Updates Across Repositories
 
-### When strukt-system updates the spec:
+**Important**: The schema sync bot has been retired. Schema specifications are now manually maintained as canonical in each repository.
 
-1. Update `schema/AIRTABLE_SPEC.yaml`
-2. Update adapter usage if needed
-3. Open PR in strukt-system
-4. After merge, open coordinated PR in strukt-app with updated spec
-5. strukt-app CI will validate compatibility
+### Process for Schema Changes
 
-### Automated sync script (future enhancement):
+When updating the Airtable schema specification:
+
+1. **Update strukt-system**:
+   - Edit `schema/AIRTABLE_SPEC.yaml`
+   - Increment `spec_version` and update `updated_at`
+   - Test: `node scripts/validate_airtable_schema.mjs --dry-run`
+
+2. **Update strukt-app**:
+   - Copy the updated schema file from strukt-system
+   - Update any code that uses the changed fields
+   - Test compatibility with the mobile app
+
+3. **Coordinate PRs**:
+   - Submit PRs to both repositories simultaneously  
+   - Reference the corresponding PR in each repository
+   - Ensure both PRs are reviewed and merged together
+
+### Manual Sync Commands
 
 ```bash
-# Run from strukt-system after spec changes
-npm run sync-spec  # Would open PRs in strukt-app automatically
+# Copy schema from strukt-system to strukt-app
+cp /path/to/strukt-system/schema/AIRTABLE_SPEC.yaml /path/to/strukt-app/schema/
+
+# Verify changes
+diff /path/to/strukt-system/schema/AIRTABLE_SPEC.yaml /path/to/strukt-app/schema/AIRTABLE_SPEC.yaml
 ```
+
+**Note**: Spec is canonical in each repo; update both in PR when schema changes.
 
 ## Best Practices
 
