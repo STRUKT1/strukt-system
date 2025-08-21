@@ -13,6 +13,42 @@ const TABLE = 'user_profiles';
 const DATA_BACKEND_PRIMARY = process.env.DATA_BACKEND_PRIMARY || 'supabase';
 const DUAL_WRITE = process.env.DUAL_WRITE === 'true';
 
+// Valid fields for user_profiles table based on schema
+const VALID_PROFILE_FIELDS = new Set([
+  'full_name', 'email', 'timezone', 'gender_identity', 'identity_other', 'pronouns',
+  'cultural_practices', 'faith_diet_rules', 'cultural_notes', 'obstacles', 'work_pattern',
+  'support_system', 'lifestyle_notes', 'injuries', 'conditions', 'contraindications',
+  'emergency_ack', 'primary_goal', 'secondary_goals', 'target_event', 'target_event_date',
+  'days_per_week', 'session_minutes', 'equipment_access', 'workout_location',
+  'experience_level', 'coaching_tone', 'learning_style', 'height_cm', 'weight_kg',
+  'units', 'sleep_time', 'wake_time', 'diet_pattern', 'fasting_pattern', 'diet_notes',
+  'allergies', 'intolerances', 'cuisines_like', 'cuisines_avoid', 'budget_band',
+  'supplements_current', 'sleep_quality', 'avg_sleep_hours', 'recovery_habits',
+  'charity_choice', 'success_definition', 'motivation_notes', 'onboarding_completed',
+  'cohort', 'data_env'
+]);
+
+/**
+ * Sanitize profile data by removing unknown fields and handling nulls
+ * @param {Object} data - Raw profile data
+ * @returns {Object} Sanitized profile data
+ */
+function sanitizeProfileData(data) {
+  const sanitized = {};
+  
+  for (const [key, value] of Object.entries(data)) {
+    if (VALID_PROFILE_FIELDS.has(key)) {
+      // Handle null/undefined values safely
+      if (value !== null && value !== undefined) {
+        sanitized[key] = value;
+      }
+    }
+    // Silently ignore unknown fields for security
+  }
+  
+  return sanitized;
+}
+
 /**
  * Get user profile by user ID
  * @param {string} userId - Auth user ID (UUID)
@@ -53,10 +89,21 @@ async function upsertUserProfile(userId, patch) {
     throw new Error('Primary backend must be supabase for this service');
   }
 
+  if (!userId || typeof userId !== 'string') {
+    throw new Error('Valid userId is required');
+  }
+
+  if (!patch || typeof patch !== 'object') {
+    throw new Error('Valid patch object is required');
+  }
+
   try {
+    // Sanitize input data - remove unknown fields and handle nulls
+    const sanitizedPatch = sanitizeProfileData(patch);
+    
     const payload = { 
       user_id: userId, 
-      ...patch,
+      ...sanitizedPatch,
       // Ensure updated_at is set (trigger will handle this, but being explicit)
       updated_at: new Date().toISOString()
     };
@@ -75,17 +122,17 @@ async function upsertUserProfile(userId, patch) {
     // Dual-write to Airtable if enabled
     if (DUAL_WRITE) {
       try {
-        await writeToAirtable(userId, patch);
-        console.log('✅ Dual-write to Airtable successful for user:', userId);
+        await writeToAirtable(userId, sanitizedPatch);
+        console.log('✅ Dual-write to Airtable successful for user:', userId.substring(0, 8) + '...');
       } catch (airtableError) {
-        console.error('⚠️ Dual-write to Airtable failed (non-blocking):', airtableError);
+        console.error('⚠️ Dual-write to Airtable failed (non-blocking):', airtableError.message);
         // Don't throw - dual-write failures shouldn't break the primary operation
       }
     }
 
     return data;
   } catch (error) {
-    console.error('upsertUserProfile failed:', error);
+    console.error('upsertUserProfile failed:', error.message);
     throw error;
   }
 }
@@ -112,7 +159,11 @@ async function writeToAirtable(userId, profileData) {
   // Set external_id to map to user_id in Supabase
   airtablePayload['external_id'] = userId;
 
-  console.log('📝 Airtable dual-write payload:', { userId, fields: Object.keys(airtablePayload) });
+  // Don't log full userId for security
+  console.log('📝 Airtable dual-write payload:', { 
+    userId: userId.substring(0, 8) + '...', 
+    fields: Object.keys(airtablePayload) 
+  });
   
   // Note: The actual Airtable write implementation would go here
   // For now, we just log the payload that would be written
@@ -134,5 +185,6 @@ function getServiceConfig() {
 module.exports = {
   getUserProfile,
   upsertUserProfile,
-  getServiceConfig
+  getServiceConfig,
+  sanitizeProfileData // Export for testing
 };
