@@ -7,6 +7,8 @@
     "dev": "nodemon server/index.js",
     "lint": "echo 'Linting...' && exit 0",
     "test": "node test/airtable-schema.test.js",
+    "test:supabase-smoke": "node test/test-supabase-smoke.js",
+    "test:supabase-integration": "node test/test-supabase-integration.js",
     "validate-schema": "node scripts/validate_airtable_schema.mjs"
   },
   "dependencies": {

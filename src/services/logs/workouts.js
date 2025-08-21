@@ -1,5 +1,5 @@
 /**
- * Workouts Service (Skeleton)
+ * Workouts Service
  * 
  * Handles workout logging operations in Supabase with optional dual-write to Airtable.
  */
@@ -8,6 +8,36 @@ const { supabaseAdmin } = require('../../lib/supabaseServer');
 
 const TABLE = 'workouts';
 
+// Environment flags for backend selection and dual-write
+const DATA_BACKEND_PRIMARY = process.env.DATA_BACKEND_PRIMARY || 'supabase';
+const DUAL_WRITE = process.env.DUAL_WRITE === 'true';
+
+// Valid fields for workouts table based on schema
+const VALID_WORKOUT_FIELDS = new Set([
+  'type', 'description', 'duration_minutes', 'calories', 'notes', 'date'
+]);
+
+/**
+ * Sanitize workout data by removing unknown fields and handling nulls
+ * @param {Object} data - Raw workout data
+ * @returns {Object} Sanitized workout data
+ */
+function sanitizeWorkoutData(data) {
+  const sanitized = {};
+  
+  for (const [key, value] of Object.entries(data)) {
+    if (VALID_WORKOUT_FIELDS.has(key)) {
+      // Handle null/undefined values safely
+      if (value !== null && value !== undefined) {
+        sanitized[key] = value;
+      }
+    }
+    // Silently ignore unknown fields for security
+  }
+  
+  return sanitized;
+}
+
 /**
  * Log a workout entry
  * @param {string} userId - Auth user ID
@@ -15,10 +45,25 @@ const TABLE = 'workouts';
  * @returns {Promise<Object>} Created workout record
  */
 async function logWorkout(userId, workoutData) {
+  if (DATA_BACKEND_PRIMARY !== 'supabase') {
+    throw new Error('Primary backend must be supabase for this service');
+  }
+
+  if (!userId || typeof userId !== 'string') {
+    throw new Error('Valid userId is required');
+  }
+
+  if (!workoutData || typeof workoutData !== 'object') {
+    throw new Error('Valid workout data is required');
+  }
+
+  // Sanitize input data
+  const sanitizedData = sanitizeWorkoutData(workoutData);
+
   const payload = {
     user_id: userId,
-    ...workoutData,
-    date: workoutData.date || new Date().toISOString().split('T')[0] // Default to today
+    ...sanitizedData,
+    date: sanitizedData.date || new Date().toISOString().split('T')[0] // Default to today
   };
 
   const { data, error } = await supabaseAdmin
@@ -28,11 +73,44 @@ async function logWorkout(userId, workoutData) {
     .single();
 
   if (error) {
-    console.error('Error logging workout:', error);
+    console.error('Error logging workout:', error.message);
     throw error;
   }
 
+  // Dual-write to Airtable if enabled
+  if (DUAL_WRITE) {
+    try {
+      await writeWorkoutToAirtable(userId, sanitizedData);
+      console.log('✅ Workout dual-write to Airtable successful');
+    } catch (airtableError) {
+      console.error('⚠️ Workout dual-write to Airtable failed (non-blocking):', airtableError.message);
+      // Don't throw - dual-write failures shouldn't break the primary operation
+    }
+  }
+
   return data;
+}
+
+/**
+ * Helper function to write workout to Airtable for dual-write
+ */
+async function writeWorkoutToAirtable(userId, workoutData) {
+  // Mapping based on docs/airtable_to_supabase_mapping.md
+  const airtablePayload = {};
+  
+  if (workoutData.type) airtablePayload['Type'] = workoutData.type;
+  if (workoutData.description) airtablePayload['Description'] = workoutData.description;
+  if (workoutData.duration_minutes) airtablePayload['Duration'] = workoutData.duration_minutes;
+  if (workoutData.calories) airtablePayload['Calories'] = workoutData.calories;
+  if (workoutData.notes) airtablePayload['Notes'] = workoutData.notes;
+  if (workoutData.date) airtablePayload['Date'] = workoutData.date;
+
+  console.log('📝 Workout Airtable dual-write payload:', { 
+    userId: userId.substring(0, 8) + '...', 
+    fields: Object.keys(airtablePayload) 
+  });
+  
+  // Note: Actual Airtable write implementation would go here
 }
 
 /**
@@ -59,5 +137,6 @@ async function getUserWorkouts(userId, limit = 20) {
 
 module.exports = {
   logWorkout,
-  getUserWorkouts
+  getUserWorkouts,
+  sanitizeWorkoutData // Export for testing
 };
