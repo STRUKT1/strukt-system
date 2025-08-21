@@ -43,7 +43,7 @@ if (options.help) {
   console.log(`
 ETL Script: Airtable → Supabase User Profiles
 
-Usage: node tools/etl_airtable_to_supabase.ts [options]
+Usage: node tools/etl_airtable_to_supabase.js [options]
 
 Options:
   --apply              Actually write to Supabase (default: dry-run mode)
@@ -56,10 +56,10 @@ Environment Variables Required:
   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 Examples:
-  node tools/etl_airtable_to_supabase.ts                    # Dry-run, 10 records
-  node tools/etl_airtable_to_supabase.ts --limit 5          # Dry-run, 5 records
-  node tools/etl_airtable_to_supabase.ts --apply            # Migrate all records
-  node tools/etl_airtable_to_supabase.ts --apply --limit 50 # Migrate 50 records
+  node tools/etl_airtable_to_supabase.js                    # Dry-run, 10 records
+  node tools/etl_airtable_to_supabase.js --limit 5          # Dry-run, 5 records
+  node tools/etl_airtable_to_supabase.js --apply            # Migrate all records
+  node tools/etl_airtable_to_supabase.js --apply --limit 50 # Migrate 50 records
 `);
   process.exit(0);
 }
