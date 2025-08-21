@@ -28,7 +28,9 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 
 - **Runtime**: Node.js + Express.js API server  
 - **AI**: OpenAI GPT-4o with GPT-3.5-turbo fallback  
-- **Database**: Airtable (users, chat history, health logs)  
+- **Database**: 
+  - **Primary**: Supabase (PostgreSQL with RLS)
+  - **Legacy**: Airtable (optional dual-write for migration)
 - **Security**: Rate limiting, CORS, input validation  
 - **Mobile**: Expo React Native client support  
 
@@ -76,11 +78,80 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 
 - **Backend**: Node.js, Express.js  
 - **AI**: OpenAI API (GPT-4o / GPT-3.5-turbo)  
-- **Database**: Airtable REST API  
+- **Database**: 
+  - **Primary**: Supabase (PostgreSQL with Row Level Security)
+  - **Legacy**: Airtable REST API (dual-write migration support)
 - **Mobile**: Expo React Native  
 - **Validation**: Joi schemas  
 - **Security**: Helmet.js, CORS, express-rate-limit  
 - **Deployment**: Heroku-compatible  
+
+---
+
+## 🔄 Database Migration (Airtable → Supabase)
+
+STRUKT is migrating from Airtable to Supabase as the primary datastore. The system supports dual-write mode during the transition.
+
+### Environment Configuration
+
+Add these variables to your `.env` file:
+
+```bash
+# Supabase Configuration
+SUPABASE_URL=your-supabase-project-url
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+
+# Backend Configuration
+DATA_BACKEND_PRIMARY=supabase    # Primary read/write backend
+DUAL_WRITE=false                 # Enable dual-write to Airtable during migration
+```
+
+### Database Schema
+
+The Supabase schema is defined in `/db/migrations/2025-08-<date>-initial-schema.sql` and includes:
+
+- `user_profiles` — User profile data with comprehensive health preferences
+- `workouts` — Exercise logging with duration, calories, notes
+- `meals` — Nutrition tracking with macros and calorie information  
+- `sleep_logs` — Sleep quality and duration tracking
+- `supplements` — Supplement intake logging
+- `mood_logs` — Daily mood and stress level tracking
+- `chat_interactions` — AI conversation history and context
+
+### ETL Migration Tool
+
+Use the ETL script to migrate data from Airtable to Supabase:
+
+```bash
+# Dry-run mode (default) - shows what would be migrated
+node tools/etl_airtable_to_supabase.js
+
+# Limit records for testing
+node tools/etl_airtable_to_supabase.js --limit 5
+
+# Actually migrate data (requires Supabase credentials)
+node tools/etl_airtable_to_supabase.js --apply
+
+# Migrate only recent records
+node tools/etl_airtable_to_supabase.js --apply --since 2024-01-01
+```
+
+The ETL tool:
+- Maps Airtable fields to Supabase schema using `/docs/airtable_to_supabase_mapping.md`
+- Handles data type conversions (arrays, booleans, dates)
+- Provides detailed progress logging and error handling
+- Supports dry-run mode for validation before migration
+
+### Dual-Write Mode
+
+During migration, enable dual-write to maintain Airtable compatibility:
+
+```bash
+DATA_BACKEND_PRIMARY=supabase
+DUAL_WRITE=true  # Writes go to both Supabase (primary) and Airtable (backup)
+```
+
+Reads always come from the primary backend (Supabase), while writes are mirrored to both systems.
 
 ---
 

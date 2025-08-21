@@ -53,3 +53,39 @@ jobs:
         VALIDATE_AIRTABLE: ${{ secrets.VALIDATE_AIRTABLE }}
         AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
         AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
+        
+    - name: Supabase schema smoke check
+      run: |
+        echo "🔍 Testing Supabase schema connectivity..."
+        node -e "
+        const { createClient } = require('@supabase/supabase-js');
+        const url = process.env.SUPABASE_URL;
+        const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        
+        if (!url || !key) {
+          console.log('⚠️ Supabase credentials not configured, skipping smoke check');
+          process.exit(0);
+        }
+        
+        const client = createClient(url, key, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+        
+        client.from('user_profiles').select('user_id').limit(1)
+          .then(result => {
+            if (result.error) {
+              console.error('❌ Supabase schema check failed:', result.error);
+              process.exit(1);
+            }
+            console.log('✅ Supabase user_profiles table accessible');
+            console.log('✅ Schema smoke check passed');
+          })
+          .catch(error => {
+            console.error('❌ Supabase connection failed:', error.message);
+            process.exit(1);
+          });
+        "
+      continue-on-error: true
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
