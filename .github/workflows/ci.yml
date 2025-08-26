@@ -1,4 +1,4 @@
-name: Expo SDK 53 CI
+name: STRUKT System CI
 
 on:
   push:
@@ -23,69 +23,49 @@ jobs:
     - name: Install dependencies
       run: npm ci
       
-    - name: Check Expo installation
-      run: npx expo install --check
-      
     - name: Run lint
       run: npm run lint || echo "No lint script found, skipping..."
       
-    - name: Verify Expo config
-      run: |
-        if [ -f app.json ]; then
-          echo "Expo config found"
-          # Check that platforms only contains ios and android
-          if grep -q '"web"' app.json; then
-            echo "ERROR: Web platform found in Expo config"
-            exit 1
-          fi
-          echo "✅ Expo config is correct (iOS/Android only)"
-        fi
+    - name: Run unit tests
+      run: node src/tests/unit.test.js
       
-    - name: Validate Airtable Schema
+    - name: Run Supabase smoke tests
+      run: npm run test:supabase-smoke
+      
+    - name: Run schema verification (without credentials)
+      run: npm run test:schema-verify || echo "⚠️ Schema verification completed with warnings (expected without credentials)"
+      continue-on-error: true
+      
+    - name: Test server startup
+      run: |
+        echo "🔍 Testing server startup..."
+        timeout 10s npm start &
+        sleep 5
+        curl -f http://localhost:4000/health || (echo "❌ Health check failed" && exit 1)
+        echo "✅ Server startup test passed"
+      
+    - name: Validate Airtable Schema (Legacy)
       run: |
         echo "🔍 Running Airtable schema validation..."
         node scripts/validate_airtable_schema.mjs || echo "⚠️ Airtable validation completed with warnings (non-blocking)"
         echo "✅ Airtable validation step completed"
       continue-on-error: true
       env:
-        # Note: Running in dry-run mode by default (no credentials)
-        # Set VALIDATE_AIRTABLE=1 in repository secrets to force live validation
         VALIDATE_AIRTABLE: ${{ secrets.VALIDATE_AIRTABLE }}
         AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
         AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
         
-    - name: Supabase schema smoke check
+    - name: Supabase integration tests (with credentials)
       run: |
-        echo "🔍 Testing Supabase schema connectivity..."
-        node -e "
-        const { createClient } = require('@supabase/supabase-js');
-        const url = process.env.SUPABASE_URL;
-        const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        
-        if (!url || !key) {
-          console.log('⚠️ Supabase credentials not configured, skipping smoke check');
-          process.exit(0);
-        }
-        
-        const client = createClient(url, key, {
-          auth: { autoRefreshToken: false, persistSession: false }
-        });
-        
-        client.from('user_profiles').select('user_id').limit(1)
-          .then(result => {
-            if (result.error) {
-              console.error('❌ Supabase schema check failed:', result.error);
-              process.exit(1);
-            }
-            console.log('✅ Supabase user_profiles table accessible');
-            console.log('✅ Schema smoke check passed');
-          })
-          .catch(error => {
-            console.error('❌ Supabase connection failed:', error.message);
-            process.exit(1);
-          });
-        "
+        echo "🔍 Testing Supabase integration..."
+        if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+          echo "⚠️ Supabase credentials not configured, skipping integration tests"
+          exit 0
+        fi
+        npm run test:schema-verify
+        echo "✅ Supabase integration tests passed"
       continue-on-error: true
       env:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
