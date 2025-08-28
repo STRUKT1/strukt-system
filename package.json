@@ -6,10 +6,12 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "lint": "echo 'Linting...' && exit 0",
-    "test": "node test/airtable-schema.test.js",
+    "test": "node test/airtable-schema.test.js && node test/nutrition.summary.test.js && node test/profile.targets.test.js",
     "test:supabase-smoke": "node test/test-supabase-smoke.js",
     "test:supabase-integration": "node test/test-supabase-integration.js",
     "test:schema-verify": "node src/scripts/verifySchema.js",
+    "test:nutrition": "node test/nutrition.summary.test.js",
+    "test:profile-targets": "node test/profile.targets.test.js",
     "validate-schema": "node scripts/validate_airtable_schema.mjs"
   },
   "dependencies": {

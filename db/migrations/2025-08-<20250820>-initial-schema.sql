@@ -87,6 +87,11 @@ create table if not exists public.user_profiles (
   success_definition text,
   motivation_notes text,
 
+  -- Nutrition targets
+  daily_kcal_target int,
+  macro_targets jsonb,        -- {"protein_g":..., "carbs_g":..., "fat_g":..., "fiber_g":...}
+  nutrition_targets jsonb,    -- full computed object {kcal, protein_g, carbs_g, fat_g, fiber_g, method, activity_factor}
+
   -- Meta
   onboarding_completed boolean default false,
   cohort text,
@@ -183,6 +188,39 @@ create table if not exists public.photos (
   created_at timestamptz default now()
 );
 create index if not exists idx_photos_userid_created on public.photos (user_id, created_at desc);
+
+-- =========================
+-- Add nutrition targets columns (idempotent)
+-- =========================
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' 
+    and table_name = 'user_profiles' 
+    and column_name = 'daily_kcal_target'
+  ) then
+    alter table public.user_profiles add column daily_kcal_target int;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' 
+    and table_name = 'user_profiles' 
+    and column_name = 'macro_targets'
+  ) then
+    alter table public.user_profiles add column macro_targets jsonb;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' 
+    and table_name = 'user_profiles' 
+    and column_name = 'nutrition_targets'
+  ) then
+    alter table public.user_profiles add column nutrition_targets jsonb;
+  end if;
+end $$;
 
 -- =========================
 -- RLS

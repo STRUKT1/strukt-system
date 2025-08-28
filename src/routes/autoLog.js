@@ -33,9 +33,13 @@ router.post('/v1/auto-log', authenticateJWT, validateAutoLogMiddleware, async (r
     
     res.json({
       ok: true,
-      id: result.id,
-      kind: result.kind,
-      created_at: result.created_at,
+      item: {
+        id: result.id,
+        kind: result.kind,
+        created_at: result.created_at,
+      },
+      today: result.today || null,
+      targets: result.targets || null,
     });
   } catch (error) {
     logger.error('Auto-log failed', {

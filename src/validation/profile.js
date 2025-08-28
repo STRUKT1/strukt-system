@@ -63,6 +63,24 @@ const profileSchema = z.object({
   height: z.number().positive().optional(),
   body_fat_percentage: z.number().min(0).max(100).optional(),
   
+  // Nutrition targets
+  daily_kcal_target: z.number().int().min(500).max(10000).optional(),
+  macro_targets: z.object({
+    protein_g: z.number().min(0).max(1000).optional(),
+    carbs_g: z.number().min(0).max(2000).optional(),
+    fat_g: z.number().min(0).max(500).optional(),
+    fiber_g: z.number().min(0).max(200).optional(),
+  }).strict().optional(),
+  nutrition_targets: z.object({
+    kcal: z.number().int().min(500).max(10000).optional(),
+    protein_g: z.number().min(0).max(1000).optional(),
+    carbs_g: z.number().min(0).max(2000).optional(),
+    fat_g: z.number().min(0).max(500).optional(),
+    fiber_g: z.number().min(0).max(200).optional(),
+    method: z.string().max(100).optional(),
+    activity_factor: z.number().min(1.0).max(3.0).optional(),
+  }).strict().optional(),
+  
   // Consent and completion
   beta_consent: z.boolean().optional(),
   data_processing_consent: z.boolean().optional(),
