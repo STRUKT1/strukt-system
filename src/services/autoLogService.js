@@ -7,6 +7,7 @@ const { logWorkout } = require('./logs/workouts');
 const { logMeal } = require('./logs/meals'); 
 const { logSleep } = require('./logs/sleep');
 const { logMood } = require('./logs/mood');
+const { getNutritionSummary } = require('./nutritionService');
 const logger = require('../lib/logger');
 
 /**
@@ -30,6 +31,17 @@ async function createAutoLog(userId, autoLogData) {
     switch (kind) {
       case 'meal':
         result = await logMeal(userId, { ...data, timestamp });
+        // Include today's nutrition summary for meals
+        try {
+          const todaySummary = await getNutritionSummary(userId, 'today', 'UTC');
+          result.today = todaySummary.totals;
+          result.targets = todaySummary.targets;
+        } catch (summaryError) {
+          logger.warn('Failed to get nutrition summary for auto-log', {
+            userIdMasked: logger.maskUserId(userId),
+            error: summaryError.message,
+          });
+        }
         break;
         
       case 'workout':

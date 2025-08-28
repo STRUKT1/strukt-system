@@ -38,6 +38,15 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 
 ## API Endpoints
 
+### v1 API (Supabase-first)
+- `GET /v1/profile` — User profile management
+- `PATCH /v1/profile` — Update user profile (including nutrition targets)
+- `POST /v1/auto-log` — Log health/fitness data with enhanced responses
+- `GET /v1/nutrition/summary` — Aggregated nutrition data with timezone support
+- `POST /v1/chat` — AI chat interactions
+- `GET /v1/chat` — Chat history
+
+### Legacy API
 - `GET /` — Health check  
 - `POST /ask` — AI chat interaction (main endpoint)  
 - `GET /chat-history` — Retrieve conversation history  
@@ -59,6 +68,7 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 | [Contributing](docs/CONTRIBUTING.md) | Guidelines for contributors |
 | [Changelog](docs/CHANGELOG.md) | Version history and updates |
 | [Airtable Schema Guide](docs/AIRTABLE_SPEC_README.md) | Schema specification and validation |
+| [Nutrition API Guide](docs/nutrition-api.md) | Nutrition targets and summary endpoints |
 
 ---
 
@@ -66,6 +76,8 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 
 - 🤖 **Conversational AI Coach** — Personalized health guidance via OpenAI  
 - 📊 **Data Logging** — Track meals, workouts, sleep, mood, supplements  
+- 🎯 **Nutrition Targets** — Set and track daily calorie and macro goals
+- 📈 **Nutrition Summaries** — Aggregated nutrition data with timezone support
 - 🧠 **Memory & Context** — AI remembers user preferences and history  
 - 🏥 **Health Focus** — Specialized prompts for fitness, nutrition, wellness  
 - 📈 **Custom Plans** — AI-generated nutrition and workout plans  

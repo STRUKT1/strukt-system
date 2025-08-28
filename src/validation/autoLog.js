@@ -18,6 +18,7 @@ const mealDataSchema = z.object({
     protein: z.number().min(0).optional(),
     carbs: z.number().min(0).optional(),
     fat: z.number().min(0).optional(),
+    fiber: z.number().min(0).optional(),
   }).optional(),
   calories: z.number().min(0).max(10000).optional(),
   notes: z.string().max(1000).optional(),
