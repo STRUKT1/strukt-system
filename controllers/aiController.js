@@ -5,6 +5,7 @@ const { getAIReply } = require('../services/openaiService');
 const { logChatInteraction, findUserIdByEmail } = require('../utils/logging');
 const { fetchUserData, buildPersonalisationPrompt } = require('../services/personalisationService');
 const { getRecentChatHistory, buildMemoryPrompt } = require('../services/memoryService');
+const { getStruktSystemPrompt } = require('../src/ai/struktSystem');
 const fs = require('fs');
 const path = require('path');
 
@@ -60,30 +61,27 @@ async function askController(req, res, next) {
     // prompt, the recent chat summary and the user’s onboarding data.
     let systemPromptCombined;
     try {
-      // Load the default STRUKT system prompt from the prompts folder.
-      const defaultPrompt = fs.readFileSync(
-        path.join(__dirname, '../utils/prompts/strukt-system-prompt.txt'),
-        'utf-8',
-      );
-      let personalPrompt = '';
-      let memoryPrompt = '';
+      let profile = null;
+      let memory = null;
+      let plan = null; // TODO: Add plan retrieval when plans are implemented
+      
       if (userId) {
+        // Fetch user profile data
         const userFields = await fetchUserData(normalisedEmail);
-        personalPrompt = buildPersonalisationPrompt(userFields);
+        profile = userFields;
+        
+        // Fetch recent chat history
         const history = await getRecentChatHistory(userId, 5);
-        memoryPrompt = buildMemoryPrompt(history);
+        memory = history;
       }
-      systemPromptCombined = [defaultPrompt, memoryPrompt, personalPrompt]
-        .filter(Boolean)
-        .join('\n\n');
+      
+      // Use the canonical system prompt function
+      systemPromptCombined = getStruktSystemPrompt(profile, plan, memory);
     } catch (contextErr) {
       // If context construction fails, log the error and fall back to
       // using the default system prompt only.  Do not block the chat.
       console.error('Context construction failed', contextErr);
-      systemPromptCombined = fs.readFileSync(
-        path.join(__dirname, '../utils/prompts/strukt-system-prompt.txt'),
-        'utf-8',
-      );
+      systemPromptCombined = getStruktSystemPrompt(); // Use base prompt without context
     }
     // Insert the custom system prompt as the first message in the
     // conversation.  Because this is a system message, getAIReply

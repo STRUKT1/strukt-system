@@ -50,6 +50,10 @@ async function getAIReply(messages = [], options = {}) {
       ...messages,
     ];
   }
+  // Apply safety limits
+  const safeMaxTokens = Math.min(options.max_tokens ?? 500, 2000); // Cap at 2000 tokens
+  const safeTemperature = Math.max(0, Math.min(options.temperature ?? 0.7, 1.0)); // Clamp 0-1
+  
   // Determine the primary model.  Default to GPT‑4o, but allow
   // override via options.model or environment.  A fallback model is
   // prepared in case the primary model is not authorised for the
@@ -57,13 +61,26 @@ async function getAIReply(messages = [], options = {}) {
   const primaryModel = options.model || process.env.OPENAI_MODEL || 'gpt-4o';
   const fallbackModel = 'gpt-3.5-turbo';
 
+  const startTime = Date.now();
+  let modelUsed = primaryModel;
+  let totalTokens = 0;
+  
   try {
     const completion = await openai.chat.completions.create({
       model: primaryModel,
       messages: msgs,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.max_tokens ?? 500,
+      temperature: safeTemperature,
+      max_tokens: safeMaxTokens,
     });
+    
+    totalTokens = completion.usage?.total_tokens || 0;
+    const latency = Date.now() - startTime;
+    
+    // Dev logging
+    if (process.env.NODE_ENV === 'development' || process.env.DEBUG_LLM) {
+      console.log(`[Coach LLM] model: ${modelUsed}, tokens: ${totalTokens}, latency: ${latency}ms`);
+    }
+    
     return completion.choices[0].message.content.trim();
   } catch (err) {
     // If the error relates to invalid permissions or unknown model,
@@ -77,12 +94,22 @@ async function getAIReply(messages = [], options = {}) {
       primaryModel !== fallbackModel
     ) {
       try {
+        modelUsed = fallbackModel;
         const fallback = await openai.chat.completions.create({
           model: fallbackModel,
           messages: msgs,
-          temperature: options.temperature ?? 0.7,
-          max_tokens: options.max_tokens ?? 500,
+          temperature: safeTemperature,
+          max_tokens: safeMaxTokens,
         });
+        
+        totalTokens = fallback.usage?.total_tokens || 0;
+        const latency = Date.now() - startTime;
+        
+        // Dev logging for fallback
+        if (process.env.NODE_ENV === 'development' || process.env.DEBUG_LLM) {
+          console.log(`[Coach LLM] fallback model: ${modelUsed}, tokens: ${totalTokens}, latency: ${latency}ms`);
+        }
+        
         return fallback.choices[0].message.content.trim();
       } catch (fallbackErr) {
         // If the fallback also fails, capture both errors and throw

@@ -11,7 +11,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const dotenv = require('dotenv');
-const OpenAI = require('openai');
 
 // Load environment variables from .env file
 dotenv.config();
@@ -53,11 +52,6 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 app.use(limiter);
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 // Mount route modules
 const askRoutes = require('../routes/ask');
