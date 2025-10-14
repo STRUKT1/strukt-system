@@ -30,7 +30,11 @@ const VALID_PROFILE_FIELDS = new Set([
   'allergies', 'intolerances', 'cuisines_like', 'cuisines_avoid', 'budget_band',
   'supplements_current', 'sleep_quality', 'avg_sleep_hours', 'recovery_habits',
   'charity_choice', 'success_definition', 'motivation_notes', 'onboarding_completed',
-  'cohort', 'data_env'
+  'cohort', 'data_env',
+  // Proactive coach fields (added 2025-10-14)
+  'why_statement', 'is_pregnant_or_breastfeeding', 'is_recovering_from_surgery',
+  'faith_based_diet', 'relationship_with_food', 'relationship_with_exercise',
+  'coaching_persona', 'anything_else_context'
 ]);
 
 /**

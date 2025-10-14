@@ -12,7 +12,7 @@ const router = express.Router();
 
 /**
  * POST /v1/chat
- * Create a new chat interaction
+ * Create a new chat interaction with magic logging
  */
 router.post('/v1/chat', authenticateJWT, validateChatMiddleware, async (req, res) => {
   try {
@@ -32,8 +32,12 @@ router.post('/v1/chat', authenticateJWT, validateChatMiddleware, async (req, res
     
     res.json({
       ok: true,
-      id: interaction.id,
-      timestamp: interaction.timestamp,
+      data: {
+        id: interaction.id,
+        response: interaction.response,
+        timestamp: interaction.timestamp,
+        context: interaction.context,
+      },
     });
   } catch (error) {
     logger.error('Chat interaction failed', {

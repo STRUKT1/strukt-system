@@ -14,7 +14,7 @@ const DUAL_WRITE = process.env.DUAL_WRITE === 'true';
 
 // Valid fields for workouts table based on schema
 const VALID_WORKOUT_FIELDS = new Set([
-  'type', 'description', 'duration_minutes', 'calories', 'notes', 'date'
+  'type', 'description', 'duration_minutes', 'distance_km', 'calories', 'notes', 'date'
 ]);
 
 /**
