@@ -7,10 +7,27 @@
 
 const { OpenAI } = require('openai');
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  project: process.env.OPENAI_PROJECT_ID || undefined,
-});
+// Initialize OpenAI client with error handling
+let openai = null;
+try {
+  if (process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      project: process.env.OPENAI_PROJECT_ID || undefined,
+    });
+  }
+} catch (error) {
+  console.warn('OpenAI client initialization failed:', error.message);
+}
+
+/**
+ * Check if OpenAI is configured
+ */
+function checkOpenAI() {
+  if (!openai) {
+    throw new Error('OpenAI is not configured. Please set OPENAI_API_KEY environment variable.');
+  }
+}
 
 /**
  * Recognize user intent from a natural language message
@@ -20,6 +37,8 @@ const openai = new OpenAI({
  * @returns {Promise<Object>} Intent object with type and entities
  */
 async function recognizeIntent(message) {
+  checkOpenAI();
+  
   const intentPrompt = `You are an expert NLU system for a fitness app. Analyze the user's message and determine their primary intent. Respond ONLY with a valid JSON object.
 The possible intents are: "log_activity" or "chat".
 If the intent is "log_activity", identify the activity type ("meal", "workout", "sleep", "mood", "supplement") and extract the relevant entities.
@@ -78,6 +97,8 @@ Your JSON response:`;
  * @returns {Promise<Object>} Extracted workout data
  */
 async function analyzeWorkoutImage(imageUrl) {
+  checkOpenAI();
+  
   const prompt = `You are a fitness data extraction expert. Analyze this screenshot from a fitness tracker (like Apple Watch, Strava, Whoop). Extract the key metrics: workout type, duration in minutes, distance in km (if available), and total calories burned. Respond ONLY with a valid JSON object with the keys "type", "duration_minutes", "distance_km", and "calories". If a metric is not present, omit the key.`;
 
   try {
@@ -113,6 +134,8 @@ async function analyzeWorkoutImage(imageUrl) {
  * @returns {Promise<Object>} Extracted meal data
  */
 async function analyzeMealImage(imageUrl) {
+  checkOpenAI();
+  
   const prompt = `You are an expert nutritionist. Analyze this photo of food. Provide your best-effort estimation for the meal's name, total calories, and macronutrients (protein, carbs, fat in grams). Respond ONLY with a valid JSON object with the keys "description", "calories", "macros": { "protein", "carbs", "fat" }.`;
 
   try {
@@ -148,6 +171,8 @@ async function analyzeMealImage(imageUrl) {
  * @returns {Promise<Object>} Generated plans
  */
 async function generateInitialPlans(userProfile) {
+  checkOpenAI();
+  
   const prompt = `You are an expert fitness and nutrition coach. Based on the user's profile, generate initial workout and nutrition plans.
 
 User Profile:
@@ -208,6 +233,8 @@ Respond ONLY with a valid JSON object:
  * @returns {Promise<string>} Daily focus text
  */
 async function generateDailyFocus(userProfile, recentActivity = {}) {
+  checkOpenAI();
+  
   const prompt = `Based on the user's profile and their recent activity, provide a single, encouraging, and actionable focus point for their day. Keep it concise (2-3 sentences).
 
 User Profile:
@@ -249,6 +276,8 @@ Provide a personalized, motivating focus point:`;
  * @returns {Promise<string>} Weekly review text
  */
 async function generateWeeklyReview(userProfile, weeklyLogs = {}) {
+  checkOpenAI();
+  
   const prompt = `Analyze the user's data from the past 7 days and generate a summary, connecting actions to outcomes.
 
 User Profile:

@@ -21,10 +21,17 @@ const systemPrompt = fs.readFileSync(
 // (sk‑proj‑…) the `project` option MUST be provided so that the API
 // knows which models are available.  Falling back to undefined
 // allows older keys to continue working without a project id.
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  project: process.env.OPENAI_PROJECT_ID || undefined,
-});
+let openai = null;
+try {
+  if (process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      project: process.env.OPENAI_PROJECT_ID || undefined,
+    });
+  }
+} catch (error) {
+  console.warn('OpenAI client initialization failed:', error.message);
+}
 
 /**
  * Generate a chat completion from OpenAI.  Accepts an array of message
@@ -39,6 +46,11 @@ const openai = new OpenAI({
  * @returns {Promise<string>} The assistant’s reply as plain text
  */
 async function getAIReply(messages = [], options = {}) {
+  // Check if OpenAI is configured
+  if (!openai) {
+    throw new Error('OpenAI is not configured. Please set OPENAI_API_KEY environment variable.');
+  }
+
   // Prepend the system prompt if the caller hasn’t provided one.  This
   // ensures the assistant always stays on brand and respects the STRUKT
   // guidelines.

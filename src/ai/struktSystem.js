@@ -155,6 +155,11 @@ function buildProfileContext(profile) {
   }
   
   // Legacy fields for backward compatibility
+  if (profile['Main Goal'] || profile.goals) {
+    const goals = profile['Main Goal'] || profile.goals;
+    sections.push(`\nGoals: ${Array.isArray(goals) ? goals.join(', ') : goals}`);
+  }
+  
   if (profile['Dietary Needs/Allergies'] || profile.dietary_needs) {
     const dietary = profile['Dietary Needs/Allergies'] || profile.dietary_needs;
     sections.push(`\nDietary needs: ${dietary}`);
