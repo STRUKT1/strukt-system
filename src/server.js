@@ -62,6 +62,8 @@ const onboardingRoutes = require('./routes/onboarding');
 const chatRoutes = require('./routes/chat');
 const autoLogRoutes = require('./routes/autoLog');
 const nutritionRoutes = require('./routes/nutrition');
+const imageLogRoutes = require('./routes/imageLog');
+const proactiveCoachRoutes = require('./routes/proactiveCoach');
 
 // Legacy routes (for backward compatibility)
 const askRoutes = require('../routes/ask');
@@ -75,6 +77,8 @@ app.use('/', onboardingRoutes);
 app.use('/', chatRoutes);
 app.use('/', autoLogRoutes);
 app.use('/', nutritionRoutes);
+app.use('/', imageLogRoutes);
+app.use('/', proactiveCoachRoutes);
 
 // Legacy routes
 app.use('/', askRoutes);
