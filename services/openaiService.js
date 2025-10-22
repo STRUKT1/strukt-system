@@ -48,7 +48,9 @@ try {
 async function getAIReply(messages = [], options = {}) {
   // Check if OpenAI is configured
   if (!openai) {
-    throw new Error('OpenAI is not configured. Please set OPENAI_API_KEY environment variable.');
+    const error = new Error('OpenAI is not configured. Please set OPENAI_API_KEY environment variable.');
+    console.error('[OpenAI Service] Configuration error:', error.message);
+    throw error;
   }
 
   // Prepend the system prompt if the caller hasn’t provided one.  This
@@ -95,6 +97,14 @@ async function getAIReply(messages = [], options = {}) {
     
     return completion.choices[0].message.content.trim();
   } catch (err) {
+    // Log the error with context
+    console.error('[OpenAI Service] API call failed:', {
+      error: err.message,
+      model: primaryModel,
+      errorType: err?.response?.data?.error?.type,
+      status: err?.response?.status,
+    });
+
     // If the error relates to invalid permissions or unknown model,
     // attempt to call again with a fallback model.  This ensures the
     // assistant still responds when GPT‑4o is unavailable under the
@@ -106,6 +116,7 @@ async function getAIReply(messages = [], options = {}) {
       primaryModel !== fallbackModel
     ) {
       try {
+        console.log(`[OpenAI Service] Attempting fallback model: ${fallbackModel}`);
         modelUsed = fallbackModel;
         const fallback = await openai.chat.completions.create({
           model: fallbackModel,
@@ -124,7 +135,11 @@ async function getAIReply(messages = [], options = {}) {
         
         return fallback.choices[0].message.content.trim();
       } catch (fallbackErr) {
-        // If the fallback also fails, capture both errors and throw
+        // If the fallback also fails, capture both errors and log
+        console.error('[OpenAI Service] Fallback model also failed:', {
+          error: fallbackErr.message,
+          model: fallbackModel,
+        });
         const wrapped = new Error('Failed to generate AI reply (fallback failed)');
         wrapped.status = fallbackErr.response?.status || 500;
         wrapped.cause = fallbackErr;
@@ -142,4 +157,21 @@ async function getAIReply(messages = [], options = {}) {
   }
 }
 
-module.exports = { getAIReply };
+/**
+ * Get a safe fallback response when OpenAI fails
+ * 
+ * @param {string} type - Type of fallback ('timeout', 'error', 'default')
+ * @returns {string} Safe fallback message
+ */
+function getFallbackResponse(type = 'default') {
+  const fallbacks = {
+    timeout: "I'm sorry, but I'm taking longer than usual to respond. Please try asking your question again in a moment. If you need immediate assistance, please reach out to support@strukt.com.",
+    error: "I apologize, but I'm experiencing technical difficulties right now. Your question is important - please try again shortly. For urgent matters, contact support@strukt.com.",
+    unsafe: "I want to make sure I give you safe, appropriate guidance. For this particular question, I'd recommend consulting with a qualified healthcare professional who can provide personalized advice based on your specific situation.",
+    default: "I'm sorry, but I'm unable to provide a response right now. Please try again in a moment. If the issue persists, contact support@strukt.com for assistance.",
+  };
+
+  return fallbacks[type] || fallbacks.default;
+}
+
+module.exports = { getAIReply, getFallbackResponse };
