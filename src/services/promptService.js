@@ -3,10 +3,13 @@
  * 
  * Manages system prompts with caching and optimization for AI coach interactions.
  * Separates static (system) and dynamic (user-specific) prompt sections.
+ * Includes long-term memory integration with weekly summaries and vector-based recall.
  */
 
 const fs = require('fs');
 const path = require('path');
+const { supabaseAdmin } = require('../lib/supabaseServer');
+const { searchSimilarLogs } = require('./embeddingService');
 
 // Cache for static system prompt
 let cachedSystemPrompt = null;
@@ -99,19 +102,109 @@ function getSystemPrompt() {
 }
 
 /**
+ * Fetch last 7 days of logs for a user
+ * 
+ * @param {string} userId - User ID (UUID)
+ * @returns {Promise<Array>} Array of recent log entries
+ */
+async function fetchRecentLogs(userId) {
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const { data, error } = await supabaseAdmin
+      .from('ai_coach_logs')
+      .select('user_message, ai_response, timestamp')
+      .eq('user_id', userId)
+      .eq('success', true)
+      .gte('timestamp', sevenDaysAgo.toISOString())
+      .order('timestamp', { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error('Failed to fetch recent logs:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Exception while fetching recent logs:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch weekly summaries for a user
+ * 
+ * @param {string} userId - User ID (UUID)
+ * @param {number} limit - Number of summaries to fetch
+ * @returns {Promise<Array>} Array of weekly summary notes
+ */
+async function fetchWeeklySummaries(userId, limit = 4) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('ai_coach_notes')
+      .select('note, created_at')
+      .eq('user_id', userId)
+      .eq('type', 'weekly_summary')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Failed to fetch weekly summaries:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Exception while fetching weekly summaries:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch relevant past logs using vector search
+ * 
+ * @param {string} userId - User ID (UUID)
+ * @param {string} queryText - Current user query
+ * @returns {Promise<Array>} Array of relevant past logs
+ */
+async function fetchRelevantPastLogs(userId, queryText) {
+  try {
+    if (!queryText || queryText.length < 10) {
+      return [];
+    }
+
+    const results = await searchSimilarLogs({
+      userId,
+      queryText,
+      limit: 3,
+      daysBack: 90,
+    });
+
+    return results;
+  } catch (error) {
+    console.error('Exception while fetching relevant past logs:', error);
+    return [];
+  }
+}
+
+/**
  * Build dynamic user context section
  * 
  * @param {Object} userData - User profile and state data
  * @param {Object} [userData.profile] - User profile information
  * @param {Array} [userData.memory] - Recent conversation history
  * @param {Object} [userData.plan] - User's current plan
- * @returns {string} Formatted user context
+ * @param {string} [userData.userId] - User ID for fetching logs
+ * @param {string} [userData.currentQuery] - Current user query for vector search
+ * @returns {Promise<string>} Formatted user context
  */
-function buildUserContext(userData = {}) {
-  const { profile, memory, plan } = userData;
+async function buildUserContext(userData = {}) {
+  const { profile, memory, plan, userId, currentQuery } = userData;
   const sections = [];
 
-  // Add memory/conversation history
+  // Add memory/conversation history (immediate context)
   if (memory && Array.isArray(memory) && memory.length > 0) {
     const memoryLines = memory.map((item, idx) => {
       const user = item.message || item.userMessage || '';
@@ -120,6 +213,66 @@ function buildUserContext(userData = {}) {
     });
     
     sections.push(`\n=== RECENT CONVERSATION ===\n${memoryLines.join('\n')}\n`);
+  }
+
+  // Add last 7 days logs summary (short-term memory)
+  if (userId) {
+    const recentLogs = await fetchRecentLogs(userId);
+    if (recentLogs.length > 0) {
+      const logSummary = [];
+      const activityTypes = { workouts: 0, meals: 0, sleep: 0, mood: 0 };
+      
+      recentLogs.forEach(log => {
+        const msg = log.user_message.toLowerCase();
+        if (msg.includes('workout') || msg.includes('train') || msg.includes('exercise')) {
+          activityTypes.workouts++;
+        }
+        if (msg.includes('meal') || msg.includes('ate') || msg.includes('food')) {
+          activityTypes.meals++;
+        }
+        if (msg.includes('sleep') || msg.includes('slept')) {
+          activityTypes.sleep++;
+        }
+        if (msg.includes('stress') || msg.includes('mood') || msg.includes('feeling')) {
+          activityTypes.mood++;
+        }
+      });
+
+      const summaryParts = [];
+      if (activityTypes.workouts > 0) summaryParts.push(`${activityTypes.workouts} workout discussions`);
+      if (activityTypes.meals > 0) summaryParts.push(`${activityTypes.meals} meal discussions`);
+      if (activityTypes.sleep > 0) summaryParts.push(`${activityTypes.sleep} sleep mentions`);
+      if (activityTypes.mood > 0) summaryParts.push(`${activityTypes.mood} mood/stress mentions`);
+
+      if (summaryParts.length > 0) {
+        logSummary.push(`Last 7 Days Activity: ${summaryParts.join(', ')}`);
+        sections.push(`\n=== LAST 7 DAYS SUMMARY ===\n${logSummary.join('\n')}\n`);
+      }
+    }
+
+    // Add weekly summaries (long-term memory)
+    const weeklySummaries = await fetchWeeklySummaries(userId);
+    if (weeklySummaries.length > 0) {
+      const summaryLines = weeklySummaries.map((summary, idx) => {
+        const date = new Date(summary.created_at).toLocaleDateString();
+        return `[Week of ${date}] ${summary.note}`;
+      });
+      
+      sections.push(`\n=== AI NOTES FROM PREVIOUS WEEKS ===\n${summaryLines.join('\n\n')}\n`);
+    }
+
+    // Add relevant past logs (vector-based recall)
+    if (currentQuery) {
+      const relevantLogs = await fetchRelevantPastLogs(userId, currentQuery);
+      if (relevantLogs.length > 0) {
+        const logLines = relevantLogs.map(log => {
+          const date = new Date(log.created_at).toLocaleDateString();
+          return `[${date}] ${log.text.substring(0, 150)}${log.text.length > 150 ? '...' : ''}`;
+        });
+        
+        sections.push(`\n=== RELEVANT PAST LOGS ===\n${logLines.join('\n')}\n`);
+      }
+    }
   }
 
   // Add profile context
@@ -167,12 +320,12 @@ function buildUserContext(userData = {}) {
  * Construct the complete prompt with system and user context
  * 
  * @param {Object} userData - User profile and state data
- * @returns {string} Complete prompt ready for LLM
+ * @returns {Promise<string>} Complete prompt ready for LLM
  */
-function buildCompletePrompt(userData = {}) {
+async function buildCompletePrompt(userData = {}) {
   try {
     const systemPrompt = getSystemPrompt();
-    const userContext = buildUserContext(userData);
+    const userContext = await buildUserContext(userData);
     
     if (userContext) {
       return `${systemPrompt}\n${userContext}`;
