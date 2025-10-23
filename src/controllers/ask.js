@@ -8,6 +8,7 @@
 const Joi = require('joi');
 const { getAIReply, getFallbackResponse } = require('../../services/openaiService');
 const { validateResponse } = require('../services/safetyValidator');
+const { validateTone } = require('../services/toneFilterService');
 const { logInteraction } = require('../services/coachLogService');
 const { buildCompletePrompt } = require('../services/promptService');
 
@@ -38,6 +39,7 @@ async function askController(req, res, next) {
   let success = false;
   let reply = null;
   let issues = null;
+  let toneIssues = null;
 
   try {
     // 1. Validate request payload
@@ -128,7 +130,29 @@ async function askController(req, res, next) {
       });
     }
 
-    // 7. Response is safe and successful
+    // 7. Validate tone safety and inclusivity
+    const toneCheck = validateTone(reply);
+    
+    if (!toneCheck.safe || toneCheck.severity === 'high') {
+      console.warn('[Ask Controller] Unsafe tone detected:', {
+        issues: toneCheck.issues,
+        severity: toneCheck.severity,
+        sentiment: toneCheck.sentiment,
+      });
+      toneIssues = toneCheck.issues;
+      
+      // Return safe fallback instead of content with tone issues
+      reply = getFallbackResponse('unsafe');
+      success = false;
+      
+      return res.status(200).json({
+        success: false,
+        reply,
+        tone_fallback: true,
+      });
+    }
+
+    // 8. Response is safe and successful
     success = true;
 
     return res.json({
@@ -150,7 +174,7 @@ async function askController(req, res, next) {
     });
     
   } finally {
-    // 8. Always log the interaction (success or failure)
+    // 9. Always log the interaction (success or failure)
     if (userId && reply) {
       const userMessage = req.body.messages?.[req.body.messages.length - 1]?.content || '';
       
@@ -162,6 +186,7 @@ async function askController(req, res, next) {
         aiResponse: reply,
         success,
         issues,
+        toneIssues,
       }).catch(logErr => {
         console.error('[Ask Controller] Failed to log interaction:', logErr.message);
       });

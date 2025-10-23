@@ -31,6 +31,7 @@ function safelyTruncate(str, maxLength) {
  * @param {boolean} params.success - Whether the interaction succeeded
  * @param {number} [params.tokenUsage] - Number of tokens used
  * @param {Array<string>} [params.issues] - Any safety issues detected
+ * @param {Array<string>} [params.toneIssues] - Any tone safety issues detected
  * @returns {Promise<Object>} Created log entry or null on failure
  */
 async function logInteraction({
@@ -41,6 +42,7 @@ async function logInteraction({
   success,
   tokenUsage = null,
   issues = null,
+  toneIssues = null,
 }) {
   try {
     // Truncate long messages to stay within reasonable DB limits
@@ -58,6 +60,11 @@ async function logInteraction({
       timestamp: new Date().toISOString(),
     };
 
+    // Add tone_issues if the column exists (graceful handling for migration)
+    if (toneIssues && toneIssues.length > 0) {
+      logEntry.tone_issues = toneIssues;
+    }
+
     const { data, error } = await supabaseAdmin
       .from('ai_coach_logs')
       .insert([logEntry])
@@ -74,6 +81,7 @@ async function logInteraction({
         messageLength: userMessage?.length,
         responseLength: aiResponse?.length,
         issues,
+        toneIssues,
       });
       return null;
     }
