@@ -28,6 +28,13 @@ const config = {
   allowedOrigins: process.env.ALLOWED_ORIGINS 
     ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
     : ['http://localhost:3000', 'http://localhost:19006'],
+  
+  // OpenAI Configuration
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY,
+    projectId: process.env.OPENAI_PROJECT_ID,
+    model: process.env.OPENAI_MODEL || 'gpt-4o',
+  },
     
   // Logging Configuration
   logLevel: process.env.LOG_LEVEL || 'info',

@@ -69,6 +69,9 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 | [Changelog](docs/CHANGELOG.md) | Version history and updates |
 | [Airtable Schema Guide](docs/AIRTABLE_SPEC_README.md) | Schema specification and validation |
 | [Nutrition API Guide](docs/nutrition-api.md) | Nutrition targets and summary endpoints |
+| **[🚀 AI Coach Deployment](docs/DEPLOY_AI_COACH.md)** | **Production deployment guide for AI Coach system** |
+| [AI Coach Memory & RAG](docs/AI_COACH_MEMORY_RAG.md) | Memory system architecture and vector search |
+| [Proactive Coaching](docs/PROACTIVE_COACH.md) | Proactive coaching features and triggers |
 
 ---
 
@@ -78,10 +81,12 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 - 📊 **Data Logging** — Track meals, workouts, sleep, mood, supplements  
 - 🎯 **Nutrition Targets** — Set and track daily calorie and macro goals
 - 📈 **Nutrition Summaries** — Aggregated nutrition data with timezone support
-- 🧠 **Memory & Context** — AI remembers user preferences and history  
+- 🧠 **Memory & Context** — AI remembers user preferences and history with RAG
+- 📝 **Weekly Summaries** — Automated weekly digests of user activity
+- 🔔 **Proactive Coaching** — Stress pattern detection and supportive interventions
 - 🏥 **Health Focus** — Specialized prompts for fitness, nutrition, wellness  
 - 📈 **Custom Plans** — AI-generated nutrition and workout plans  
-- 🔒 **Secure** — Rate limiting, input validation, CORS protection  
+- 🔒 **Secure** — Rate limiting, input validation, CORS protection, RLS  
 - 📱 **Mobile Ready** — JSON API designed for mobile app integration  
 
 ---
@@ -164,6 +169,52 @@ DUAL_WRITE=true  # Writes go to both Supabase (primary) and Airtable (backup)
 ```
 
 Reads always come from the primary backend (Supabase), while writes are mirrored to both systems.
+
+---
+
+## 🤖 AI Coach Production Deployment
+
+The STRUKT AI Coach system includes advanced features like memory, weekly summaries, and proactive coaching. For production deployment:
+
+### Quick Deployment
+1. **Read the deployment guide:** [docs/DEPLOY_AI_COACH.md](docs/DEPLOY_AI_COACH.md)
+2. **Check deployment summary:** [DEPLOYMENT_SUMMARY.md](DEPLOYMENT_SUMMARY.md)
+3. **Follow the checklist:** [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md)
+
+### Key Components
+- **`/ask` endpoint** — Main AI chat interface with memory and context
+- **`generateWeeklyDigest`** — Supabase Edge Function (runs Sundays)
+- **`checkUserStatus`** — Supabase Edge Function (runs daily)
+
+### Deployment Script
+```bash
+# Deploy Edge Functions to Supabase
+./scripts/deploy-edge-functions.sh --project-ref <your-ref>
+
+# Or dry-run to test
+./scripts/deploy-edge-functions.sh --project-ref <your-ref> --dry-run
+```
+
+### Environment Variables (Production)
+```bash
+# CORS Configuration for production
+ALLOWED_ORIGINS=https://api.strukt.fit,https://app.strukt.fit,https://*.expo.dev,https://*.strukt.fit
+
+# Supabase
+SUPABASE_URL=https://[project-ref].supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+SUPABASE_ANON_KEY=eyJ...
+
+# OpenAI
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o
+
+# Server
+NODE_ENV=production
+PORT=4000
+```
+
+**See [DEPLOY_AI_COACH.md](docs/DEPLOY_AI_COACH.md) for complete deployment instructions.**
 
 ---
 

@@ -39,7 +39,24 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
     
-    if (config.allowedOrigins.includes(origin)) {
+    // Check if origin matches any allowed origins (including wildcards)
+    const isAllowed = config.allowedOrigins.some(allowedOrigin => {
+      // Direct match
+      if (allowedOrigin === origin) return true;
+      
+      // Wildcard pattern match (e.g., https://*.expo.dev)
+      if (allowedOrigin.includes('*')) {
+        const pattern = allowedOrigin
+          .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // Escape special regex chars
+          .replace(/\*/g, '.*'); // Replace * with .* for regex
+        const regex = new RegExp(`^${pattern}$`);
+        return regex.test(origin);
+      }
+      
+      return false;
+    });
+    
+    if (isAllowed) {
       return callback(null, true);
     }
     
