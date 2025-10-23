@@ -90,15 +90,35 @@ function loadSystemPrompt() {
 
 /**
  * Get the static system prompt (with caching)
+ * Wraps the base prompt with tone control instructions
  * 
- * @returns {string} System prompt text
+ * @returns {string} System prompt text with tone control wrapper
  */
 function getSystemPrompt() {
+  let basePrompt;
+  
   if (isCacheValid()) {
-    return cachedSystemPrompt;
+    basePrompt = cachedSystemPrompt;
+  } else {
+    basePrompt = loadSystemPrompt();
   }
 
-  return loadSystemPrompt();
+  // Prepend tone control instructions
+  const toneControlBlock = `=== TONE CONTROL ===
+Always speak like a respectful, supportive, inclusive coach.
+Avoid judgment, sarcasm, or shame.
+Adapt tone to user's situation (mood, energy, time).
+NEVER offer advice that could cause harm.
+Be sensitive to mental health, body image, eating disorders, and trauma.
+Use gender-neutral language unless the user's pronouns are known.
+Avoid prescriptive commands - offer suggestions and options instead.
+Never use failure-oriented, derogatory, or ableist language.
+
+===
+
+`;
+
+  return toneControlBlock + basePrompt;
 }
 
 /**
@@ -293,6 +313,26 @@ async function buildUserContext(userData = {}) {
     
     if (profile.injuries && profile.injuries.length > 0) {
       profileLines.push(`Injuries: ${profile.injuries.join(', ')}`);
+    }
+    
+    // Add coaching tone preference
+    if (profile.coaching_tone) {
+      const toneMap = {
+        'gentle': 'The user prefers a gentle and nurturing tone.',
+        'direct': 'The user prefers a direct and straightforward tone.',
+        'cheerleader': 'The user prefers an enthusiastic and motivational tone.',
+        'brief': 'The user prefers concise and to-the-point responses.',
+        'friendly': 'The user prefers a friendly and supportive tone.',
+      };
+      
+      const tonePreference = toneMap[profile.coaching_tone.toLowerCase()] || 
+                             `The user prefers a ${profile.coaching_tone} coaching tone.`;
+      profileLines.push(`Tone preference: ${tonePreference}`);
+    }
+    
+    // Add sensitivity markers
+    if (profile.high_sensitivity || profile.mental_health_support) {
+      profileLines.push(`Note: User has high sensitivity - be extra gentle and supportive.`);
     }
     
     if (profileLines.length > 0) {
