@@ -16,6 +16,8 @@
     "test:ai-coach": "node src/tests/safetyValidator.test.js && node src/tests/openaiService.test.js && node src/tests/ask.test.js && node __tests__/toneFilterService.test.js",
     "test:ai-coach-memory": "node src/tests/weeklyDigest.test.js && node src/tests/vectorSearch.test.js && node src/tests/proactiveTrigger.test.js",
     "test:plan-generation": "node __tests__/planGeneration.test.js",
+    "test:audit-validation": "node scripts/validateDashboardAudit.js",
+    "test:dashboard-audit": "node __tests__/dashboardAudit.test.js",
     "validate-schema": "node scripts/validate_airtable_schema.mjs"
   },
   "dependencies": {

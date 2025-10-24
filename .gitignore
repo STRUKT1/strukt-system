@@ -73,3 +73,7 @@ local.properties
 # Temporary files
 *.tmp
 *.temp
+
+# Logs
+src/logs/
+*.log

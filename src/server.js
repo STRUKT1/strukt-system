@@ -9,6 +9,8 @@ const helmet = require('helmet');
 const { config, validateConfig } = require('./config');
 const { standardRateLimit } = require('./lib/rateLimit');
 const logger = require('./lib/logger');
+const dashboardAuditService = require('./services/dashboardAuditService');
+const dashboardMetricsService = require('./services/dashboardMetricsService');
 
 // Validate configuration
 const { errors, warnings } = validateConfig();
@@ -27,8 +29,20 @@ if (errors.length > 0) {
 // Create Express app
 const app = express();
 
+// Initialize audit and metrics services
+dashboardAuditService.initialize().catch(err => {
+  logger.warn('Dashboard audit service initialization failed', { error: err.message });
+});
+dashboardMetricsService.initialize();
+
 // Request logging middleware
 app.use(logger.requestLogger);
+
+// Correlation ID middleware for audit traceability
+app.use(dashboardAuditService.correlationMiddleware);
+
+// Metrics tracking middleware
+app.use(dashboardMetricsService.metricsMiddleware);
 
 // Security middleware
 app.use(helmet());
@@ -81,6 +95,7 @@ const autoLogRoutes = require('./routes/autoLog');
 const nutritionRoutes = require('./routes/nutrition');
 const imageLogRoutes = require('./routes/imageLog');
 const proactiveCoachRoutes = require('./routes/proactiveCoach');
+const metricsRoutes = require('./routes/metrics');
 
 // Legacy routes (for backward compatibility)
 const askRoutes = require('../routes/ask');
@@ -96,6 +111,7 @@ app.use('/', autoLogRoutes);
 app.use('/', nutritionRoutes);
 app.use('/', imageLogRoutes);
 app.use('/', proactiveCoachRoutes);
+app.use('/', metricsRoutes);
 
 // Legacy routes
 app.use('/', askRoutes);
