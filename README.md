@@ -46,6 +46,10 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 - `POST /v1/chat` — AI chat interactions
 - `GET /v1/chat` — Chat history
 
+### Monitoring & Metrics
+- `GET /api/metrics/dashboard` — Performance metrics (JSON or Prometheus format)
+- `GET /api/metrics/dashboard/operations` — Per-operation metrics breakdown
+
 ### Legacy API
 - `GET /` — Health check  
 - `POST /ask` — AI chat interaction (main endpoint)  
@@ -72,6 +76,7 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 | **[🚀 AI Coach Deployment](docs/DEPLOY_AI_COACH.md)** | **Production deployment guide for AI Coach system** |
 | [AI Coach Memory & RAG](docs/AI_COACH_MEMORY_RAG.md) | Memory system architecture and vector search |
 | [Proactive Coaching](docs/PROACTIVE_COACH.md) | Proactive coaching features and triggers |
+| **[📊 Dashboard Audit Upgrade](docs/DASHBOARD_AUDIT_UPGRADE.md)** | **Production audit logging, metrics, and compliance** |
 
 ---
 
@@ -86,6 +91,7 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 - 🔔 **Proactive Coaching** — Stress pattern detection and supportive interventions
 - 🏥 **Health Focus** — Specialized prompts for fitness, nutrition, wellness  
 - 📈 **Custom Plans** — AI-generated nutrition and workout plans  
+- 📊 **Production Audit** — Complete audit trail with performance metrics and compliance
 - 🔒 **Secure** — Rate limiting, input validation, CORS protection, RLS  
 - 📱 **Mobile Ready** — JSON API designed for mobile app integration  
 
