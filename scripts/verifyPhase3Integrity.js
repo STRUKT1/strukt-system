@@ -20,6 +20,13 @@ const path = require('path');
 let allChecksPass = true;
 const results = [];
 
+/**
+ * Check a condition and log the result
+ * @param {string} name - Name of the check
+ * @param {boolean} condition - Condition to check
+ * @param {string} errorMessage - Error message to display if check fails
+ * @returns {boolean} The condition result
+ */
 function check(name, condition, errorMessage = '') {
   const status = condition ? '✅' : '❌';
   const message = condition ? name : `${name} - ${errorMessage}`;
@@ -31,10 +38,21 @@ function check(name, condition, errorMessage = '') {
   return condition;
 }
 
+/**
+ * Check if a file exists in the project
+ * @param {string} filePath - Relative path to file from project root
+ * @returns {boolean} True if file exists, false otherwise
+ */
 function fileExists(filePath) {
   return fs.existsSync(path.join(__dirname, '..', filePath));
 }
 
+/**
+ * Check if a file contains a specific string
+ * @param {string} filePath - Relative path to file from project root
+ * @param {string} searchString - String to search for
+ * @returns {boolean} True if file exists and contains the string, false otherwise
+ */
 function fileContains(filePath, searchString) {
   try {
     const content = fs.readFileSync(path.join(__dirname, '..', filePath), 'utf8');
