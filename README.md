@@ -76,6 +76,7 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 | **[🚀 AI Coach Deployment](docs/DEPLOY_AI_COACH.md)** | **Production deployment guide for AI Coach system** |
 | [AI Coach Memory & RAG](docs/AI_COACH_MEMORY_RAG.md) | Memory system architecture and vector search |
 | [Proactive Coaching](docs/PROACTIVE_COACH.md) | Proactive coaching features and triggers |
+| **[⚡ Phase 3 System Activation](docs/STRUKT_SYSTEM_PHASE3.md)** | **Automated intelligence, CRON jobs, and reliability** |
 | **[📊 Dashboard Audit Upgrade](docs/DASHBOARD_AUDIT_UPGRADE.md)** | **Production audit logging, metrics, and compliance** |
 
 ---
@@ -92,6 +93,7 @@ It is implemented as a Node.js/Express API, offering endpoints for AI chat, heal
 - 🏥 **Health Focus** — Specialized prompts for fitness, nutrition, wellness  
 - 📈 **Custom Plans** — AI-generated nutrition and workout plans  
 - 📊 **Production Audit** — Complete audit trail with performance metrics and compliance
+- ⚡ **Automated Coaching & System Heartbeat (Phase 3 Activated)** — Self-monitoring CRON jobs with retry logic
 - 🔒 **Secure** — Rate limiting, input validation, CORS protection, RLS  
 - 📱 **Mobile Ready** — JSON API designed for mobile app integration  
 

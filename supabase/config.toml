@@ -1,0 +1,72 @@
+# Supabase Configuration
+# STRUKT System - Phase 3 Intelligence Activation
+
+[project]
+# This file is generated for local development and testing.
+# Production configuration is managed via Supabase Dashboard.
+
+# ===========================================
+# Edge Functions Configuration
+# ===========================================
+
+[functions.generateWeeklyDigest]
+verify_jwt = false  # Service role authentication
+
+[functions.checkUserStatus]
+verify_jwt = false  # Service role authentication
+
+# ===========================================
+# CRON Job Schedules
+# ===========================================
+# Note: Actual CRON jobs are configured via pg_cron in Supabase
+# See: db/migrations/20251023_setup_cron_jobs.sql
+#
+# Schedule Reference:
+# - generateWeeklyDigest: Every Sunday @ 08:00 UTC (20:00 UTC per migration)
+# - checkUserStatus: Daily @ 07:00 UTC (08:00 UTC per migration)
+#
+# To configure in production:
+# 1. Deploy Edge Functions: supabase functions deploy <function-name>
+# 2. Run migration: supabase db push
+# 3. Update placeholders in 20251023_setup_cron_jobs.sql
+# 4. Verify: SELECT * FROM cron.job;
+
+# ===========================================
+# Database Configuration
+# ===========================================
+
+[db]
+# PostgreSQL version
+major_version = 15
+
+# ===========================================
+# API Configuration
+# ===========================================
+
+[api]
+# Increased timeout for Edge Functions
+max_rows = 1000
+db_timeout = 120000  # 2 minutes for long-running operations
+
+# ===========================================
+# Auth Configuration
+# ===========================================
+
+[auth]
+# Auth settings managed via Supabase Dashboard
+enabled = true
+site_url = "http://localhost:3000"
+
+# ===========================================
+# Local Development
+# ===========================================
+
+[local]
+# Port for Supabase Studio
+port = 54323
+
+# Port for API server
+api_port = 54321
+
+# Port for DB direct connection
+db_port = 54322
