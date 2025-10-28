@@ -20,6 +20,7 @@
     "test:dashboard-audit": "node __tests__/dashboardAudit.test.js",
     "test:cron-functions": "node __tests__/cronFunctions.test.js",
     "simulate:digest": "node scripts/simulateDigest.js",
+    "verify:phase3": "node scripts/verifyPhase3Integrity.js",
     "validate-schema": "node scripts/validate_airtable_schema.mjs"
   },
   "dependencies": {
