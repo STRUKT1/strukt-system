@@ -18,6 +18,8 @@
     "test:plan-generation": "node __tests__/planGeneration.test.js",
     "test:audit-validation": "node scripts/validateDashboardAudit.js",
     "test:dashboard-audit": "node __tests__/dashboardAudit.test.js",
+    "test:cron-functions": "node __tests__/cronFunctions.test.js",
+    "simulate:digest": "node scripts/simulateDigest.js",
     "validate-schema": "node scripts/validate_airtable_schema.mjs"
   },
   "dependencies": {

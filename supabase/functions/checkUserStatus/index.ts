@@ -30,6 +30,35 @@ interface StressPattern {
 }
 
 /**
+ * Retry helper with exponential backoff
+ * Attempts: 1st immediate, 2nd +3s, 3rd +10s
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  delays = [0, 3000, 10000]
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      if (attempt > 0 && delays[attempt - 1]) {
+        await new Promise(resolve => setTimeout(resolve, delays[attempt - 1]));
+      }
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      console.log(`Attempt ${attempt + 1} failed: ${lastError.message}`);
+      if (attempt === maxAttempts - 1) {
+        throw lastError;
+      }
+    }
+  }
+  
+  throw lastError!;
+}
+
+/**
  * Analyze logs for stress patterns
  */
 function detectStressPattern(logs: LogEntry[]): boolean {
@@ -80,6 +109,11 @@ function generateProactiveMessage(): string {
  * Main handler function
  */
 serve(async (req) => {
+  const startTime = Date.now();
+  let runStatus = 'success';
+  let errorMessage: string | null = null;
+  let cronDetails: any = {};
+
   try {
     // Initialize Supabase client with service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -95,12 +129,14 @@ serve(async (req) => {
     const now = new Date();
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
 
-    // Get all logs from the past 3 days
-    const { data: logs, error: logsError } = await supabase
-      .from('ai_coach_logs')
-      .select('user_id, user_message, ai_response, timestamp')
-      .gte('timestamp', threeDaysAgo.toISOString())
-      .order('timestamp', { ascending: true });
+    // Get all logs from the past 3 days with retry logic
+    const { data: logs, error: logsError } = await retryWithBackoff(async () => {
+      return await supabase
+        .from('ai_coach_logs')
+        .select('user_id, user_message, ai_response, timestamp')
+        .gte('timestamp', threeDaysAgo.toISOString())
+        .order('timestamp', { ascending: true });
+    });
 
     if (logsError) {
       throw new Error(`Failed to fetch logs: ${logsError.message}`);
@@ -119,6 +155,8 @@ serve(async (req) => {
 
     // Detect stress patterns and create notifications
     const triggeredNotifications: StressPattern[] = [];
+    const failures: string[] = [];
+    
     for (const [userId, userLogs] of logsByUser.entries()) {
       try {
         const hasStressPattern = detectStressPattern(userLogs);
@@ -136,16 +174,22 @@ serve(async (req) => {
           if (!recentNotifications || recentNotifications.length === 0) {
             const message = generateProactiveMessage();
 
-            const { error: insertError } = await supabase
-              .from('coach_notifications')
-              .insert({
-                user_id: userId,
-                message,
-                type: 'ai_coach_proactive',
-              });
+            const { error: insertError } = await retryWithBackoff(async () => {
+              return await supabase
+                .from('coach_notifications')
+                .insert({
+                  user_id: userId,
+                  message,
+                  type: 'ai_coach_proactive',
+                  priority: 'normal',
+                  delivery_channel: 'in-app',
+                  status: 'pending'
+                });
+            });
 
             if (insertError) {
               console.error(`Failed to insert notification for user ${userId}:`, insertError);
+              failures.push(userId);
             } else {
               triggeredNotifications.push({
                 userId,
@@ -160,14 +204,46 @@ serve(async (req) => {
         }
       } catch (error) {
         console.error(`Failed to process user ${userId}:`, error);
+        failures.push(userId);
       }
     }
 
+    // Set status based on results
+    if (failures.length > 0 && triggeredNotifications.length === 0 && logsByUser.size > 0) {
+      runStatus = 'error';
+      errorMessage = `Failed to process all users. Failures: ${failures.length}`;
+    } else if (failures.length > 0) {
+      runStatus = 'partial_success';
+      errorMessage = `Partial success. Successes: ${triggeredNotifications.length}, Failures: ${failures.length}`;
+    }
+
+    cronDetails = {
+      totalUsers: logsByUser.size,
+      triggeredNotifications: triggeredNotifications.length,
+      failures: failures.length,
+      dateRange: { from: threeDaysAgo.toISOString(), to: now.toISOString() }
+    };
+
+    // Log to system_cron_logs
+    const durationMs = Date.now() - startTime;
+    await supabase
+      .from('system_cron_logs')
+      .insert({
+        function_name: 'checkUserStatus',
+        run_status: runStatus,
+        run_time: new Date().toISOString(),
+        details: cronDetails,
+        duration_ms: durationMs,
+        attempts: 1,
+        error_message: errorMessage,
+      });
+
     return new Response(
       JSON.stringify({
-        success: true,
+        success: runStatus !== 'error',
         message: `Checked ${logsByUser.size} users, triggered ${triggeredNotifications.length} notifications`,
         notifications: triggeredNotifications,
+        failures,
       }),
       {
         headers: { 'Content-Type': 'application/json' },
@@ -176,10 +252,36 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error in checkUserStatus:', error);
+    
+    // Log error to system_cron_logs
+    const durationMs = Date.now() - startTime;
+    runStatus = 'error';
+    errorMessage = error.message || 'Unknown error';
+    
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      await supabase
+        .from('system_cron_logs')
+        .insert({
+          function_name: 'checkUserStatus',
+          run_status: 'error',
+          run_time: new Date().toISOString(),
+          details: { error: errorMessage },
+          duration_ms: durationMs,
+          attempts: 1,
+          error_message: errorMessage,
+        });
+    } catch (logError) {
+      console.error('Failed to log error to system_cron_logs:', logError);
+    }
+    
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Unknown error',
+        error: errorMessage,
       }),
       {
         headers: { 'Content-Type': 'application/json' },

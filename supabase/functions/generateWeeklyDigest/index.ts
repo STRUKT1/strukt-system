@@ -30,6 +30,35 @@ interface DigestResult {
 }
 
 /**
+ * Retry helper with exponential backoff
+ * Attempts: 1st immediate, 2nd +3s, 3rd +10s
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  delays = [0, 3000, 10000]
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      if (attempt > 0 && delays[attempt - 1]) {
+        await new Promise(resolve => setTimeout(resolve, delays[attempt - 1]));
+      }
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      console.log(`Attempt ${attempt + 1} failed: ${lastError.message}`);
+      if (attempt === maxAttempts - 1) {
+        throw lastError;
+      }
+    }
+  }
+  
+  throw lastError!;
+}
+
+/**
  * Generate a weekly digest for a single user
  */
 async function generateUserDigest(
@@ -61,35 +90,43 @@ ${logSummary}
 
 Weekly Summary:`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${openaiApiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'You are a helpful fitness coach creating weekly summaries.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 300,
-    }),
+  // Retry with exponential backoff
+  return await retryWithBackoff(async () => {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a helpful fitness coach creating weekly summaries.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 300,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content.trim();
   });
-
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content.trim();
 }
 
 /**
  * Main handler function
  */
 serve(async (req) => {
+  const startTime = Date.now();
+  let runStatus = 'success';
+  let errorMessage: string | null = null;
+  let cronDetails: any = {};
+
   try {
     // Initialize Supabase client with service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -131,6 +168,8 @@ serve(async (req) => {
 
     // Generate digests for each user
     const results: DigestResult[] = [];
+    const failures: string[] = [];
+    
     for (const [userId, userLogs] of logsByUser.entries()) {
       try {
         const digest = await generateUserDigest(userId, userLogs, openaiApiKey);
@@ -146,6 +185,7 @@ serve(async (req) => {
 
         if (insertError) {
           console.error(`Failed to insert digest for user ${userId}:`, insertError);
+          failures.push(userId);
         } else {
           results.push({
             userId,
@@ -156,14 +196,46 @@ serve(async (req) => {
         }
       } catch (error) {
         console.error(`Failed to generate digest for user ${userId}:`, error);
+        failures.push(userId);
       }
     }
 
+    // Set status based on results
+    if (failures.length > 0 && results.length === 0) {
+      runStatus = 'error';
+      errorMessage = `Failed to generate all digests. Failures: ${failures.length}`;
+    } else if (failures.length > 0) {
+      runStatus = 'partial_success';
+      errorMessage = `Partial success. Successes: ${results.length}, Failures: ${failures.length}`;
+    }
+
+    cronDetails = {
+      totalUsers: logsByUser.size,
+      successfulDigests: results.length,
+      failedDigests: failures.length,
+      dateRange: { from: sevenDaysAgo.toISOString(), to: now.toISOString() }
+    };
+
+    // Log to system_cron_logs
+    const durationMs = Date.now() - startTime;
+    await supabase
+      .from('system_cron_logs')
+      .insert({
+        function_name: 'generateWeeklyDigest',
+        run_status: runStatus,
+        run_time: new Date().toISOString(),
+        details: cronDetails,
+        duration_ms: durationMs,
+        attempts: 1,
+        error_message: errorMessage,
+      });
+
     return new Response(
       JSON.stringify({
-        success: true,
+        success: runStatus !== 'error',
         message: `Generated ${results.length} weekly digests`,
         results,
+        failures,
       }),
       {
         headers: { 'Content-Type': 'application/json' },
@@ -172,10 +244,36 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error in generateWeeklyDigest:', error);
+    
+    // Log error to system_cron_logs
+    const durationMs = Date.now() - startTime;
+    runStatus = 'error';
+    errorMessage = error.message || 'Unknown error';
+    
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      await supabase
+        .from('system_cron_logs')
+        .insert({
+          function_name: 'generateWeeklyDigest',
+          run_status: 'error',
+          run_time: new Date().toISOString(),
+          details: { error: errorMessage },
+          duration_ms: durationMs,
+          attempts: 1,
+          error_message: errorMessage,
+        });
+    } catch (logError) {
+      console.error('Failed to log error to system_cron_logs:', logError);
+    }
+    
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Unknown error',
+        error: errorMessage,
       }),
       {
         headers: { 'Content-Type': 'application/json' },
