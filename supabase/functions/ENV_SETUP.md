@@ -214,6 +214,67 @@ GRANT ALL ON public.system_cron_logs TO authenticated;
 
 **Note**: Edge Functions have been updated to use `admin.system_cron_logs` automatically. No additional code changes are needed.
 
+### Embeddings Retention Policy (P0-4)
+
+**Migration**: `20251113_embeddings_retention_policy.sql` and `20251113_schedule_embeddings_cleanup.sql`
+
+STRUKT implements a 90-day retention policy for conversation embeddings to comply with GDPR data minimization principles.
+
+**What this does:**
+- Automatically deletes `log_embeddings` records older than 90 days
+- Runs weekly on Sundays at 3:00 AM UTC
+- Logs cleanup activity to `admin.system_cron_logs`
+- Preserves recent conversation context while removing old data
+
+#### Manual Cleanup (Optional)
+
+To manually trigger cleanup before the scheduled run:
+```bash
+# Connect to your database
+supabase db execute --sql "SELECT * FROM cleanup_old_embeddings();"
+```
+
+**Expected output:**
+```
+deleted_count | oldest_deleted          | execution_time
+-------------+-------------------------+----------------
+42           | 2025-08-15 10:23:45+00  | 00:00:00.234
+```
+
+#### Verify CRON Schedule
+
+```bash
+# Check that the CRON job is scheduled
+supabase db execute --sql "SELECT * FROM cron.job WHERE jobname = 'cleanup-old-embeddings-weekly';"
+```
+
+#### Retention Policy Details
+
+- **Retention Period**: 90 days
+- **Cleanup Frequency**: Weekly (Sundays at 3 AM UTC)
+- **Scope**: Only affects `log_embeddings` table
+- **User Data**: User profiles and messages are NOT affected
+- **Reasoning**: Balances AI quality (needs recent context) with privacy (removes old data)
+
+#### Troubleshooting
+
+**Problem: Cleanup not running**
+**Solution**: Check CRON logs in `admin.system_cron_logs`:
+```sql
+SELECT * FROM admin.system_cron_logs
+WHERE function_name = 'cleanup_old_embeddings'
+ORDER BY execution_time DESC
+LIMIT 10;
+```
+
+**Problem: Want different retention period**
+**Solution**: Update the function:
+```sql
+-- Change 90 days to desired period
+-- Update interval in function definition
+WHERE created_at < NOW() - INTERVAL '60 days'  -- Example: 60 days
+```
+
 ---
 
 ## 🧪 Testing Edge Functions
@@ -488,5 +549,5 @@ supabase functions logs checkUserStatus --follow
 ---
 
 **Last Updated**: 2025-11-13
-**Security Audit**: P0-1 (Edge Functions Authentication) ✅, P0-3 (System Logs Access Control) ✅, P0-5 (Rate Limiting) ✅
+**Security Audit**: P0-1 (Edge Functions Authentication) ✅, P0-3 (System Logs Access Control) ✅, P0-4 (Embeddings Retention Policy) ✅, P0-5 (Rate Limiting) ✅
 **Compliance Sprint**: 6-week GDPR implementation
