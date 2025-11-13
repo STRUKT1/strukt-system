@@ -17,6 +17,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0'
 import { authenticateRequest } from '../_shared/auth.ts'
 import { checkRateLimit } from '../_shared/rateLimit.ts'
+import { checkUserConsent } from '../_shared/consentCheck.ts'
 
 // Type definitions
 interface LogEntry {
@@ -171,12 +172,36 @@ serve(async (req) => {
     // Detect stress patterns and create notifications
     const triggeredNotifications: StressPattern[] = [];
     const failures: string[] = [];
-    
+    const skippedNoConsent: string[] = [];
+
     for (const [userId, userLogs] of logsByUser.entries()) {
       try {
         const hasStressPattern = detectStressPattern(userLogs);
 
         if (hasStressPattern) {
+          // GDPR Compliance: Check user consent before processing user data
+          // Note: Current implementation uses local analysis only, but consent check
+          // is in place for future OpenAI integration and data privacy compliance
+          const consentResult = await checkUserConsent(supabase, userId, 'openai_processing');
+
+          if (!consentResult.hasConsent) {
+            console.log('[CONSENT] Skipping notification - no user consent', {
+              userId,
+              function: 'checkUserStatus',
+              timestamp: new Date().toISOString(),
+              note: 'User has not granted consent for AI data processing'
+            });
+            skippedNoConsent.push(userId);
+            continue; // Skip this user, move to next
+          }
+
+          // User has granted consent - proceed with notification
+          console.log('[CONSENT] User consent confirmed - proceeding with notification', {
+            userId,
+            granted_at: consentResult.consentRecord?.granted_at,
+            function: 'checkUserStatus'
+          });
+
           // Check if we already sent a notification recently (within last 3 days)
           const { data: recentNotifications } = await supabase
             .from('coach_notifications')
@@ -236,6 +261,7 @@ serve(async (req) => {
       totalUsers: logsByUser.size,
       triggeredNotifications: triggeredNotifications.length,
       failures: failures.length,
+      skippedNoConsent: skippedNoConsent.length,
       dateRange: { from: threeDaysAgo.toISOString(), to: now.toISOString() }
     };
 
@@ -256,9 +282,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: runStatus !== 'error',
-        message: `Checked ${logsByUser.size} users, triggered ${triggeredNotifications.length} notifications`,
+        message: `Checked ${logsByUser.size} users, triggered ${triggeredNotifications.length} notifications, skipped ${skippedNoConsent.length} users (no consent)`,
         notifications: triggeredNotifications,
         failures,
+        skippedNoConsent,
       }),
       {
         headers: { 'Content-Type': 'application/json' },

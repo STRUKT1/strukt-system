@@ -275,6 +275,197 @@ LIMIT 10;
 WHERE created_at < NOW() - INTERVAL '60 days'  -- Example: 60 days
 ```
 
+### User Consent System (P0-2)
+
+**Migrations**: `20251113_create_user_consents.sql`
+
+STRUKT implements GDPR-compliant user consent for OpenAI data processing. Users must explicitly opt-in before their personal health data can be sent to OpenAI's API.
+
+**What this does:**
+- Creates `user_consents` table to track consent records
+- Implements consent checks in Edge Functions before OpenAI API calls
+- Skips AI processing for users who haven't granted consent
+- Provides audit trail for all consent actions (grant, revoke, checks)
+- Enables Row Level Security (RLS) to protect user privacy
+
+#### Database Schema
+
+The `user_consents` table stores:
+- `user_id`: Reference to authenticated user
+- `consent_type`: Type of consent ('openai_processing', 'analytics', 'marketing')
+- `granted`: Boolean indicating if consent is active
+- `granted_at`: Timestamp when consent was granted
+- `withdrawn_at`: Timestamp when consent was withdrawn (null if active)
+- `privacy_policy_version`: Version of privacy policy accepted
+- `ip_address`: IP address from which consent was granted
+- `user_agent`: User agent string for audit purposes
+
+#### Consent Types
+
+- **`openai_processing`**: User data can be sent to OpenAI for AI coaching
+- **`analytics`**: User behavior can be tracked for analytics (future use)
+- **`marketing`**: User can receive marketing communications (future use)
+
+#### Apply Migration
+
+After merging this PR, run the migration:
+
+```bash
+# Push migration to Supabase
+supabase db push
+```
+
+#### Verify Migration
+
+Confirm the table is created with correct permissions:
+
+```bash
+# Check table exists
+supabase db execute --sql "
+SELECT table_name, table_schema
+FROM information_schema.tables
+WHERE table_name = 'user_consents';
+"
+
+# Verify RLS is enabled
+supabase db execute --sql "
+SELECT tablename, rowsecurity
+FROM pg_tables
+WHERE tablename = 'user_consents';
+"
+# Expected: rowsecurity = true
+```
+
+#### How Consent Checks Work
+
+1. **Before OpenAI API calls**, Edge Functions call `checkUserConsent()`
+2. The function queries `user_consents` table for the user
+3. If no consent record exists OR consent is withdrawn → **Skip AI processing**
+4. If consent is granted and active → **Proceed with OpenAI API call**
+5. All consent checks are logged with timestamps for audit compliance
+
+**Edge Functions with consent checks:**
+- `generateWeeklyDigest` - Checks before generating AI summaries
+- `checkUserStatus` - Checks before processing user data (future-proofing)
+
+#### Consent Check Example
+
+```typescript
+import { checkUserConsent } from '../_shared/consentCheck.ts';
+
+// Check consent before OpenAI
+const consentResult = await checkUserConsent(supabase, userId, 'openai_processing');
+
+if (!consentResult.hasConsent) {
+  console.log('[CONSENT] Skipping OpenAI - no user consent');
+  return; // Skip AI processing
+}
+
+// User has consented - proceed with OpenAI
+console.log('[CONSENT] Consent confirmed - proceeding');
+// ... call OpenAI API ...
+```
+
+#### Testing Consent System
+
+**Test 1: User without consent (AI processing skipped)**
+```sql
+-- Verify user has no consent record
+SELECT * FROM user_consents
+WHERE user_id = 'test-user-id'
+AND consent_type = 'openai_processing';
+-- Expected: 0 rows
+
+-- Run Edge Function (e.g., generateWeeklyDigest)
+-- Check logs for:
+-- [CONSENT] Skipping OpenAI processing - no user consent
+```
+
+**Test 2: User with active consent (AI processing proceeds)**
+```sql
+-- Grant consent for test user
+INSERT INTO user_consents (user_id, consent_type, granted, granted_at, privacy_policy_version)
+VALUES (
+  'test-user-id',
+  'openai_processing',
+  true,
+  NOW(),
+  '1.0'
+);
+
+-- Run Edge Function
+-- Check logs for:
+-- [CONSENT] User consent confirmed - proceeding with OpenAI processing
+```
+
+**Test 3: User withdraws consent (AI processing stops)**
+```sql
+-- Withdraw consent
+UPDATE user_consents
+SET granted = false, withdrawn_at = NOW()
+WHERE user_id = 'test-user-id'
+AND consent_type = 'openai_processing';
+
+-- Run Edge Function
+-- Expected: User is skipped (no OpenAI processing)
+```
+
+#### GDPR Compliance
+
+This implementation satisfies:
+- **Article 6**: Lawful basis for processing (user consent)
+- **Article 7**: Conditions for consent (freely given, specific, informed, unambiguous)
+- **Article 17**: Right to withdraw consent (users can revoke at any time)
+- **Article 30**: Records of processing activities (audit trail in logs)
+
+#### Audit Trail
+
+All consent operations are logged:
+
+```
+[CONSENT_CHECK] Consent check completed
+{
+  requestId: "uuid-here",
+  timestamp: "2025-11-13T10:00:00Z",
+  userId: "user-uuid",
+  consentType: "openai_processing",
+  hasConsent: true,
+  granted_at: "2025-11-01T12:00:00Z",
+  privacy_policy_version: "1.0"
+}
+```
+
+#### Monitoring Consent Metrics
+
+```sql
+-- Count users who have granted consent
+SELECT COUNT(*) as consented_users
+FROM user_consents
+WHERE consent_type = 'openai_processing'
+AND granted = true
+AND withdrawn_at IS NULL;
+
+-- Count users who withdrew consent
+SELECT COUNT(*) as withdrawn_users
+FROM user_consents
+WHERE consent_type = 'openai_processing'
+AND withdrawn_at IS NOT NULL;
+
+-- View recent consent grants
+SELECT user_id, granted_at, privacy_policy_version
+FROM user_consents
+WHERE consent_type = 'openai_processing'
+AND granted = true
+ORDER BY granted_at DESC
+LIMIT 10;
+```
+
+#### Next Steps (Phase 2 & 3)
+
+This is **Phase 1** (Database + Backend). Future phases include:
+- **Phase 2**: Frontend consent screen on user onboarding
+- **Phase 3**: User settings page to manage consent preferences
+
 ---
 
 ## 🧪 Testing Edge Functions
@@ -549,5 +740,5 @@ supabase functions logs checkUserStatus --follow
 ---
 
 **Last Updated**: 2025-11-13
-**Security Audit**: P0-1 (Edge Functions Authentication) ✅, P0-3 (System Logs Access Control) ✅, P0-4 (Embeddings Retention Policy) ✅, P0-5 (Rate Limiting) ✅
+**Security Audit**: P0-1 (Edge Functions Authentication) ✅, P0-2 (User Consent System - Phase 1) ✅, P0-3 (System Logs Access Control) ✅, P0-4 (Embeddings Retention Policy) ✅, P0-5 (Rate Limiting) ✅
 **Compliance Sprint**: 6-week GDPR implementation
