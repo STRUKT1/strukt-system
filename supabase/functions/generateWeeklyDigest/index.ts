@@ -17,6 +17,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0'
 import { authenticateRequest } from '../_shared/auth.ts'
 import { checkRateLimit } from '../_shared/rateLimit.ts'
+import { checkUserConsent } from '../_shared/consentCheck.ts'
 
 // Type definitions
 interface LogEntry {
@@ -184,9 +185,30 @@ serve(async (req) => {
     // Generate digests for each user
     const results: DigestResult[] = [];
     const failures: string[] = [];
-    
+    const skippedNoConsent: string[] = [];
+
     for (const [userId, userLogs] of logsByUser.entries()) {
       try {
+        // GDPR Compliance: Check user consent before sending data to OpenAI
+        const consentResult = await checkUserConsent(supabase, userId, 'openai_processing');
+
+        if (!consentResult.hasConsent) {
+          console.log('[CONSENT] Skipping OpenAI processing - no user consent', {
+            userId,
+            function: 'generateWeeklyDigest',
+            timestamp: new Date().toISOString()
+          });
+          skippedNoConsent.push(userId);
+          continue; // Skip this user, move to next
+        }
+
+        // User has granted consent - proceed with OpenAI processing
+        console.log('[CONSENT] User consent confirmed - proceeding with OpenAI processing', {
+          userId,
+          granted_at: consentResult.consentRecord?.granted_at,
+          function: 'generateWeeklyDigest'
+        });
+
         const digest = await generateUserDigest(userId, userLogs, openaiApiKey);
 
         // Store digest in ai_coach_notes
@@ -228,6 +250,7 @@ serve(async (req) => {
       totalUsers: logsByUser.size,
       successfulDigests: results.length,
       failedDigests: failures.length,
+      skippedNoConsent: skippedNoConsent.length,
       dateRange: { from: sevenDaysAgo.toISOString(), to: now.toISOString() }
     };
 
@@ -248,9 +271,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: runStatus !== 'error',
-        message: `Generated ${results.length} weekly digests`,
+        message: `Generated ${results.length} weekly digests, skipped ${skippedNoConsent.length} users (no consent)`,
         results,
         failures,
+        skippedNoConsent,
       }),
       {
         headers: { 'Content-Type': 'application/json' },
