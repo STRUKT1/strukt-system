@@ -41,6 +41,27 @@ These variables must be set for all Edge Functions:
 - **Source**: OpenAI Platform → API Keys
 - **Security**: Keep this secret! Grants access to OpenAI services
 
+### Rate Limiting (Recommended)
+
+#### `UPSTASH_REDIS_REST_URL` (Optional but Recommended)
+- **Purpose**: Upstash Redis REST API endpoint for rate limiting
+- **Format**: `https://your-redis.upstash.io`
+- **Source**: Upstash Console → Redis → REST API → UPSTASH_REDIS_REST_URL
+- **Behavior**: If not set, rate limiting is disabled (fail-open for graceful degradation)
+
+#### `UPSTASH_REDIS_REST_TOKEN` (Optional but Recommended)
+- **Purpose**: Upstash Redis authentication token
+- **Format**: Long token string
+- **Source**: Upstash Console → Redis → REST API → UPSTASH_REDIS_REST_TOKEN
+- **Security**: Keep this secret! Grants access to your Redis instance
+
+**Rate Limiting Details:**
+- **Limit**: 100 requests per hour per Edge Function
+- **Response**: Returns `429 Too Many Requests` when limit exceeded
+- **Behavior**: Fails open (allows requests) if Redis is unavailable
+- **Headers**: Rate limit info returned in `X-RateLimit-*` headers
+- **Logging**: All rate limit violations are logged for monitoring
+
 ---
 
 ## 🚀 Deployment Setup
@@ -71,6 +92,10 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 ```bash
 # Set CRON_SECRET_KEY
 supabase secrets set CRON_SECRET_KEY=your_generated_secret_here
+
+# Set Upstash Redis credentials (for rate limiting)
+supabase secrets set UPSTASH_REDIS_REST_URL=https://your-redis.upstash.io
+supabase secrets set UPSTASH_REDIS_REST_TOKEN=your_upstash_token
 
 # Verify secrets are set
 supabase secrets list
@@ -180,6 +205,37 @@ curl -X POST https://your-project.supabase.co/functions/v1/generateWeeklyDigest 
 # [AUTH] SUCCESS: Request authenticated
 ```
 
+### Test Rate Limiting
+
+**Test rate limit (make 101+ requests in an hour):**
+```bash
+# Test rate limit headers in response
+for i in {1..5}; do
+  curl -X POST https://your-project.supabase.co/functions/v1/checkUserStatus \
+    -H "X-Cron-Secret: YOUR_CRON_SECRET_KEY" \
+    -v -s -o /dev/null -w "Request $i: HTTP %{http_code}\n"
+  sleep 1
+done
+
+# After 100 requests in 1 hour, you should see:
+# HTTP 429 Too Many Requests
+# {
+#   "error": "Too Many Requests",
+#   "code": "RATE_LIMIT_EXCEEDED",
+#   "message": "Rate limit exceeded. Maximum 100 requests per hour.",
+#   "requestId": "...",
+#   "retryAfter": "2025-11-13T11:00:00Z",
+#   "requestCount": 101,
+#   "limit": 100
+# }
+
+# Check rate limit headers:
+# X-RateLimit-Limit: 100
+# X-RateLimit-Remaining: 0
+# X-RateLimit-Reset: 2025-11-13T11:00:00Z
+# Retry-After: 3600
+```
+
 ---
 
 ## 🔍 Monitoring & Logging
@@ -217,6 +273,58 @@ All authentication attempts are logged with the following format:
   requestId: "uuid-here",
   timestamp: "2025-11-13T10:00:00Z",
   error: "Missing environment variable"
+}
+```
+
+### Rate Limiting Logs
+
+All rate limit checks are logged:
+
+**Request allowed (under limit):**
+```
+[RATE_LIMIT] Request counted
+{
+  requestId: "uuid-here",
+  timestamp: "2025-11-13T10:00:00Z",
+  functionName: "checkUserStatus",
+  requestCount: 45,
+  limit: 100,
+  resetTime: "2025-11-13T11:00:00Z"
+}
+```
+
+**Rate limit exceeded:**
+```
+[RATE_LIMIT] LIMIT EXCEEDED
+{
+  requestId: "uuid-here",
+  timestamp: "2025-11-13T10:00:00Z",
+  functionName: "checkUserStatus",
+  requestCount: 101,
+  limit: 100,
+  resetTime: "2025-11-13T11:00:00Z"
+}
+```
+
+**Redis not configured (warning):**
+```
+[RATE_LIMIT] WARNING: Upstash Redis not configured
+{
+  requestId: "uuid-here",
+  timestamp: "2025-11-13T10:00:00Z",
+  functionName: "checkUserStatus",
+  error: "Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN"
+}
+```
+
+**Redis operation failed (fail-open):**
+```
+[RATE_LIMIT] ERROR: Redis operation failed
+{
+  requestId: "uuid-here",
+  timestamp: "2025-11-13T10:00:00Z",
+  functionName: "checkUserStatus",
+  error: "Connection timeout"
 }
 ```
 
@@ -260,6 +368,22 @@ supabase functions logs checkUserStatus --follow
 **Cause**: Required environment variables not set
 **Solution**: Verify all required variables are set for the specific function (see "Required Environment Variables" above)
 
+### Problem: Rate limiting not working
+**Cause**: Upstash Redis credentials not configured
+**Solution**:
+1. Verify Upstash Redis instance is created
+2. Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`
+3. Redeploy Edge Functions
+4. Check logs for `[RATE_LIMIT]` messages
+
+### Problem: Getting 429 errors too frequently
+**Cause**: Rate limit (100 requests/hour) exceeded
+**Solution**:
+1. Review function logs to identify cause of high request volume
+2. Adjust `RATE_LIMIT_CONFIG` in `_shared/rateLimit.ts` if needed
+3. Consider implementing per-user rate limits
+4. Wait for rate limit window to reset (shown in `X-RateLimit-Reset` header)
+
 ---
 
 ## 📚 Additional Resources
@@ -295,5 +419,5 @@ supabase functions logs checkUserStatus --follow
 ---
 
 **Last Updated**: 2025-11-13
-**Security Audit**: P0-1 (Edge Functions Authentication)
+**Security Audit**: P0-1 (Edge Functions Authentication) ✅, P0-5 (Rate Limiting) ✅
 **Compliance Sprint**: 6-week GDPR implementation
