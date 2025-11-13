@@ -10,10 +10,12 @@
  * - OPENAI_API_KEY: OpenAI API key for GPT-4
  * - SUPABASE_URL: Supabase project URL
  * - SUPABASE_SERVICE_ROLE_KEY: Service role key for database operations
+ * - CRON_SECRET_KEY: Secret key for authenticating CRON requests (X-Cron-Secret header)
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0'
+import { authenticateRequest } from '../_shared/auth.ts'
 
 // Type definitions
 interface LogEntry {
@@ -122,6 +124,12 @@ Weekly Summary:`;
  * Main handler function
  */
 serve(async (req) => {
+  // Authentication check - MUST be first!
+  const authResult = await authenticateRequest(req);
+  if (!authResult.authorized) {
+    return authResult.response;
+  }
+
   const startTime = Date.now();
   let runStatus = 'success';
   let errorMessage: string | null = null;
