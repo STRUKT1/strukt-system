@@ -234,7 +234,7 @@ serve(async (req) => {
     // Log to system_cron_logs
     const durationMs = Date.now() - startTime;
     await supabase
-      .from('system_cron_logs')
+      .from('admin.system_cron_logs')
       .insert({
         function_name: 'generateWeeklyDigest',
         run_status: runStatus,
@@ -271,7 +271,7 @@ serve(async (req) => {
       const supabase = createClient(supabaseUrl, supabaseKey);
       
       await supabase
-        .from('system_cron_logs')
+        .from('admin.system_cron_logs')
         .insert({
           function_name: 'generateWeeklyDigest',
           run_status: 'error',
