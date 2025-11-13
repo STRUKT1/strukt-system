@@ -147,6 +147,75 @@ curl -X POST https://your-project.supabase.co/functions/v1/checkUserStatus \
 
 ---
 
+## 🗄️ Database Migrations
+
+### Running the Admin Schema Migration (P0-3)
+
+**Migration**: `20251113_move_system_logs_admin.sql`
+
+This migration moves the `system_cron_logs` table from the `public` schema to a new `admin` schema to prevent unauthorized access by authenticated users. This addresses Security Audit P0-3.
+
+**What this migration does:**
+- Creates `admin` schema if it doesn't exist
+- Moves `system_cron_logs` from `public` to `admin` schema
+- Revokes all public, authenticated, and anonymous access
+- Grants full access only to `service_role`
+- Adds verification checks to ensure migration succeeded
+
+#### Apply Migration
+
+After merging this PR, run the migration:
+
+```bash
+# Push migration to Supabase
+supabase db push
+```
+
+#### Verify Migration
+
+Confirm the table is now in the admin schema:
+
+```bash
+# Check table location
+supabase db execute --sql "
+SELECT table_schema, table_name
+FROM information_schema.tables
+WHERE table_name = 'system_cron_logs';
+"
+
+# Expected output: table_schema = 'admin'
+```
+
+Verify permissions are correct:
+
+```bash
+# Check table privileges
+supabase db execute --sql "
+SELECT grantee, privilege_type
+FROM information_schema.table_privileges
+WHERE table_schema = 'admin'
+AND table_name = 'system_cron_logs';
+"
+
+# Expected: Only service_role should have privileges
+```
+
+#### Rollback (if needed)
+
+If you need to rollback this migration:
+
+```sql
+-- Move table back to public schema
+ALTER TABLE admin.system_cron_logs SET SCHEMA public;
+
+-- Restore public access (not recommended for security)
+GRANT ALL ON public.system_cron_logs TO authenticated;
+```
+
+**Note**: Edge Functions have been updated to use `admin.system_cron_logs` automatically. No additional code changes are needed.
+
+---
+
 ## 🧪 Testing Edge Functions
 
 ### Test Authentication
@@ -419,5 +488,5 @@ supabase functions logs checkUserStatus --follow
 ---
 
 **Last Updated**: 2025-11-13
-**Security Audit**: P0-1 (Edge Functions Authentication) ✅, P0-5 (Rate Limiting) ✅
+**Security Audit**: P0-1 (Edge Functions Authentication) ✅, P0-3 (System Logs Access Control) ✅, P0-5 (Rate Limiting) ✅
 **Compliance Sprint**: 6-week GDPR implementation
