@@ -96,6 +96,7 @@ const nutritionRoutes = require('./routes/nutrition');
 const imageLogRoutes = require('./routes/imageLog');
 const proactiveCoachRoutes = require('./routes/proactiveCoach');
 const metricsRoutes = require('./routes/metrics');
+const mealLoggingRoutes = require('./routes/mealLogging');
 
 // Legacy routes (for backward compatibility)
 const askRoutes = require('../routes/ask');
@@ -112,6 +113,7 @@ app.use('/', nutritionRoutes);
 app.use('/', imageLogRoutes);
 app.use('/', proactiveCoachRoutes);
 app.use('/', metricsRoutes);
+app.use('/', mealLoggingRoutes);
 
 // Legacy routes
 app.use('/', askRoutes);

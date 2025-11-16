@@ -13,6 +13,9 @@ const { logWorkout } = require('./logs/workouts');
 const { logSleep } = require('./logs/sleep');
 const { logMood } = require('./logs/mood');
 const { logSupplement } = require('./logs/supplements');
+const { parseFoodFromText } = require('./foodParsingService');
+const { getNutritionForFoods, calculateTotals } = require('./nutritionDatabaseService');
+const { supabaseAdmin } = require('../lib/supabaseServer');
 const logger = require('../lib/logger');
 
 /**
@@ -45,8 +48,8 @@ async function createChatInteraction(userId, chatData) {
     if (intent.intent === 'log_activity' && intent.type && intent.entities) {
       // Step 3: Create the appropriate log
       try {
-        logCreated = await createLogFromIntent(userId, intent);
-        
+        logCreated = await createLogFromIntent(userId, intent, userMessage);
+
         // Step 4: Generate confirmation message
         aiResponse = generateConfirmationMessage(intent.type, logCreated);
         
@@ -96,18 +99,14 @@ async function createChatInteraction(userId, chatData) {
 /**
  * Create a log entry based on recognized intent
  */
-async function createLogFromIntent(userId, intent) {
+async function createLogFromIntent(userId, intent, userMessage) {
   const { type, entities } = intent;
-  
+
   switch (type) {
     case 'meal':
-      return await logMeal(userId, {
-        description: entities.description,
-        calories: entities.calories,
-        macros: entities.macros,
-        notes: entities.notes,
-      });
-      
+      // Use enhanced GPT-4 food parsing for meals
+      return await logMealWithParsing(userId, userMessage, entities);
+
     case 'workout':
       return await logWorkout(userId, {
         type: entities.type,
@@ -144,9 +143,118 @@ async function createLogFromIntent(userId, intent) {
 }
 
 /**
+ * Log meal with enhanced GPT-4 food parsing and nutrition lookup
+ */
+async function logMealWithParsing(userId, userMessage, entities) {
+  try {
+    logger.info('Logging meal with GPT-4 food parsing', {
+      userIdMasked: logger.maskUserId(userId),
+    });
+
+    // Step 1: Parse food from message using GPT-4
+    const parsedMeal = await parseFoodFromText(userMessage, userId, {
+      timestamp: new Date().toISOString(),
+    });
+
+    if (!parsedMeal.foods || parsedMeal.foods.length === 0) {
+      // Fallback to simple logging if parsing fails
+      logger.warn('Food parsing returned no foods, using fallback', {
+        userIdMasked: logger.maskUserId(userId),
+      });
+      return await logMeal(userId, {
+        description: entities.description || userMessage,
+        calories: entities.calories,
+        macros: entities.macros,
+        notes: 'Auto-logged via chat',
+      });
+    }
+
+    // Step 2: Look up nutrition data for each food
+    const foodsWithNutrition = await getNutritionForFoods(parsedMeal.foods);
+
+    // Step 3: Calculate totals
+    const totals = calculateTotals(foodsWithNutrition);
+
+    // Step 4: Save to database with enhanced fields
+    const mealTimestamp = new Date().toISOString();
+    const mealDate = mealTimestamp.split('T')[0];
+
+    const mealPayload = {
+      user_id: userId,
+      meal_type: parsedMeal.meal_type,
+      timestamp: mealTimestamp,
+      date: mealDate,
+      foods: foodsWithNutrition,
+      source: 'chat', // Source is chat, not voice
+      confidence: parsedMeal.confidence,
+      transcription: userMessage,
+      // Legacy fields for backward compatibility
+      description: userMessage,
+      calories: totals.calories,
+      macros: {
+        protein: totals.protein,
+        carbs: totals.carbs,
+        fat: totals.fat,
+        fiber: totals.fiber,
+      },
+      notes: 'Auto-logged via chat',
+    };
+
+    const { data: savedMeal, error } = await supabaseAdmin
+      .from('meals')
+      .insert(mealPayload)
+      .select()
+      .single();
+
+    if (error) {
+      logger.error('Failed to save meal to database', {
+        userIdMasked: logger.maskUserId(userId),
+        error: error.message,
+      });
+      throw error;
+    }
+
+    logger.info('Meal logged successfully with nutrition data', {
+      userIdMasked: logger.maskUserId(userId),
+      mealId: savedMeal.id,
+      totalCalories: totals.calories,
+      foodCount: foodsWithNutrition.length,
+    });
+
+    // Return meal with nutrition totals for confirmation message
+    return {
+      ...savedMeal,
+      totals,
+      foodCount: foodsWithNutrition.length,
+    };
+  } catch (error) {
+    logger.error('Enhanced meal logging failed, using fallback', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message,
+    });
+
+    // Fallback to simple logging on error
+    return await logMeal(userId, {
+      description: entities.description || userMessage,
+      calories: entities.calories,
+      macros: entities.macros,
+      notes: 'Auto-logged via chat (fallback)',
+    });
+  }
+}
+
+/**
  * Generate a confirmation message for a logged activity
  */
 function generateConfirmationMessage(logType, logData) {
+  // Enhanced meal confirmation with nutrition data
+  if (logType === 'meal' && logData.totals) {
+    const { calories, protein } = logData.totals;
+    const foodCount = logData.foodCount || 0;
+    return `Logged! ${calories} cal, ${protein}g protein (${foodCount} ${foodCount === 1 ? 'item' : 'items'}). Nice ${logData.meal_type || 'meal'}! 🍽️`;
+  }
+
+  // Standard confirmations for other log types
   const confirmations = {
     meal: `Got it! I've logged that meal for you. 🍽️`,
     workout: `Awesome! I've logged your workout. 🏋️‍♂️`,
@@ -154,7 +262,7 @@ function generateConfirmationMessage(logType, logData) {
     mood: `I've noted how you're feeling today. 🧠`,
     supplement: `Got it! I've logged your supplement. 💊`,
   };
-  
+
   return confirmations[logType] || `I've logged that for you.`;
 }
 
