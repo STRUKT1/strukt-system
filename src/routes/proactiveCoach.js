@@ -10,14 +10,16 @@ const { getUserWeightLogs } = require('../services/logs/weight');
 const { generateInitialPlans, generateDailyFocus, generateWeeklyReview } = require('../services/aiExtensions');
 const { supabaseAdmin } = require('../lib/supabaseServer');
 const logger = require('../lib/logger');
+const { createPlanGenerationLimiter } = require('../lib/rateLimit');
 
 const router = express.Router();
+const planLimiter = createPlanGenerationLimiter();
 
 /**
  * POST /v1/plans/generate
  * Generate initial workout and nutrition plans based on user profile
  */
-router.post('/v1/plans/generate', authenticateJWT, async (req, res) => {
+router.post('/v1/plans/generate', authenticateJWT, planLimiter, async (req, res) => {
   try {
     logger.info('Plan generation requested', {
       requestId: req.requestId,

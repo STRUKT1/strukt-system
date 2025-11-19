@@ -9,8 +9,10 @@ const { parseFoodFromText } = require('../services/foodParsingService');
 const { getNutritionForFoods, calculateTotals } = require('../services/nutritionDatabaseService');
 const { supabaseAdmin } = require('../lib/supabaseServer');
 const logger = require('../lib/logger');
+const { createVoiceLogLimiter } = require('../lib/rateLimit');
 
 const router = express.Router();
+const voiceLimiter = createVoiceLogLimiter();
 
 /**
  * POST /v1/meals/voice-log
@@ -37,7 +39,7 @@ const router = express.Router();
  *   }
  * }
  */
-router.post('/v1/meals/voice-log', authenticateJWT, async (req, res) => {
+router.post('/v1/meals/voice-log', authenticateJWT, voiceLimiter, async (req, res) => {
   try {
     const { transcription, timestamp } = req.body;
 

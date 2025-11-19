@@ -5,14 +5,14 @@
 
 const express = require('express');
 const { authenticateJWT } = require('../lib/auth');
-const { createUserRateLimit } = require('../lib/rateLimit');
+const { createPhotoAnalysisLimiter } = require('../lib/rateLimit');
 const { analyzeWorkoutPhoto, analyzeMealPhoto } = require('../services/photoAnalysisService');
 const logger = require('../lib/logger');
 
 const router = express.Router();
 
 // Rate limiter: 20 photo analyses per hour per user
-const photoAnalysisLimiter = createUserRateLimit(60 * 60 * 1000, 20);
+const photoAnalysisLimiter = createPhotoAnalysisLimiter();
 
 /**
  * POST /v1/photos/analyze-workout
