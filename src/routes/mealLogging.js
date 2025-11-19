@@ -5,6 +5,7 @@
 
 const express = require('express');
 const { authenticateJWT } = require('../lib/auth');
+const { requireOpenAIConsent } = require('../lib/gdprConsent');
 const { parseFoodFromText } = require('../services/foodParsingService');
 const { getNutritionForFoods, calculateTotals } = require('../services/nutritionDatabaseService');
 const { supabaseAdmin } = require('../lib/supabaseServer');
@@ -39,7 +40,7 @@ const voiceLimiter = createVoiceLogLimiter();
  *   }
  * }
  */
-router.post('/v1/meals/voice-log', authenticateJWT, voiceLimiter, async (req, res) => {
+router.post('/v1/meals/voice-log', authenticateJWT, voiceLimiter, requireOpenAIConsent, async (req, res) => {
   try {
     const { transcription, timestamp } = req.body;
 

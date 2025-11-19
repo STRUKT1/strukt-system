@@ -5,6 +5,7 @@
 
 const express = require('express');
 const { authenticateJWT } = require('../lib/auth');
+const { requireOpenAIConsent } = require('../lib/gdprConsent');
 const { createPhotoAnalysisLimiter } = require('../lib/rateLimit');
 const { analyzeWorkoutPhoto, analyzeMealPhoto } = require('../services/photoAnalysisService');
 const logger = require('../lib/logger');
@@ -47,7 +48,7 @@ const photoAnalysisLimiter = createPhotoAnalysisLimiter();
  *   }
  * }
  */
-router.post('/v1/photos/analyze-workout', authenticateJWT, photoAnalysisLimiter, async (req, res) => {
+router.post('/v1/photos/analyze-workout', authenticateJWT, photoAnalysisLimiter, requireOpenAIConsent, async (req, res) => {
   try {
     const { photo, hint } = req.body;
 
@@ -177,7 +178,7 @@ router.post('/v1/photos/analyze-workout', authenticateJWT, photoAnalysisLimiter,
  *   }
  * }
  */
-router.post('/v1/photos/analyze-meal', authenticateJWT, photoAnalysisLimiter, async (req, res) => {
+router.post('/v1/photos/analyze-meal', authenticateJWT, photoAnalysisLimiter, requireOpenAIConsent, async (req, res) => {
   try {
     const { photo, mealType } = req.body;
 
