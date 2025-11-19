@@ -8,6 +8,7 @@
 const express = require('express');
 const logger = require('../lib/logger');
 const metricsService = require('../services/dashboardMetricsService');
+const { authenticateJWT } = require('../lib/auth');
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ const router = express.Router();
  * GET /api/metrics/dashboard
  * Returns dashboard performance metrics in JSON format
  */
-router.get('/api/metrics/dashboard', (req, res) => {
+router.get('/api/metrics/dashboard', authenticateJWT, async (req, res) => {
   try {
     const format = req.query.format || 'json';
     
@@ -50,7 +51,7 @@ router.get('/api/metrics/dashboard', (req, res) => {
  * GET /api/metrics/dashboard/operations
  * Returns metrics breakdown by operation
  */
-router.get('/api/metrics/dashboard/operations', (req, res) => {
+router.get('/api/metrics/dashboard/operations', authenticateJWT, async (req, res) => {
   try {
     const operationMetrics = metricsService.getMetricsByOperation();
     
