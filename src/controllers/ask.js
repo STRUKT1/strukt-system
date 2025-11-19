@@ -1,6 +1,6 @@
 /**
  * AI Coach Controller
- * 
+ *
  * Handles AI coach /ask endpoint with comprehensive validation, safety checks,
  * logging, and fallback handling.
  */
@@ -11,6 +11,7 @@ const { validateResponse } = require('../services/safetyValidator');
 const { validateTone } = require('../services/toneFilterService');
 const { logInteraction } = require('../services/coachLogService');
 const { buildCompletePrompt } = require('../services/promptService');
+const logger = require('../lib/logger');
 
 // Validation schema for the /ask payload
 const askSchema = Joi.object({
@@ -97,13 +98,16 @@ async function askController(req, res, next) {
     try {
       reply = await getAIReply(messagesWithPrompt);
     } catch (aiError) {
-      console.error('[Ask Controller] OpenAI error:', aiError.message);
-      
+      logger.error('OpenAI API request failed', {
+        error: aiError.message,
+        userIdMasked: userId ? logger.maskUserId(userId) : undefined,
+      });
+
       // Use fallback response based on error type
       const fallbackType = aiError.message.includes('timeout') ? 'timeout' : 'error';
       reply = getFallbackResponse(fallbackType);
       success = false;
-      
+
       // Still log the failed interaction
       return res.status(200).json({
         success: false,
@@ -114,15 +118,18 @@ async function askController(req, res, next) {
 
     // 6. Validate safety of response
     const safetyCheck = validateResponse(reply);
-    
+
     if (!safetyCheck.safe) {
-      console.warn('[Ask Controller] Unsafe response detected:', safetyCheck.issues);
+      logger.warn('Unsafe AI response detected', {
+        issues: safetyCheck.issues,
+        userIdMasked: userId ? logger.maskUserId(userId) : undefined,
+      });
       issues = safetyCheck.issues;
-      
+
       // Return safe fallback instead of unsafe content
       reply = getFallbackResponse('unsafe');
       success = false;
-      
+
       return res.status(200).json({
         success: false,
         reply,
@@ -132,19 +139,20 @@ async function askController(req, res, next) {
 
     // 7. Validate tone safety and inclusivity
     const toneCheck = validateTone(reply);
-    
+
     if (!toneCheck.safe || toneCheck.severity === 'high') {
-      console.warn('[Ask Controller] Unsafe tone detected:', {
+      logger.warn('Unsafe tone detected in AI response', {
         issues: toneCheck.issues,
         severity: toneCheck.severity,
         sentiment: toneCheck.sentiment,
+        userIdMasked: userId ? logger.maskUserId(userId) : undefined,
       });
       toneIssues = toneCheck.issues;
-      
+
       // Return safe fallback instead of content with tone issues
       reply = getFallbackResponse('unsafe');
       success = false;
-      
+
       return res.status(200).json({
         success: false,
         reply,
@@ -162,22 +170,25 @@ async function askController(req, res, next) {
 
   } catch (err) {
     // Unexpected error - log and return fallback
-    console.error('[Ask Controller] Unexpected error:', err);
-    
+    logger.error('Unexpected error in ask controller', {
+      error: err.message,
+      userIdMasked: userId ? logger.maskUserId(userId) : undefined,
+    });
+
     reply = getFallbackResponse('error');
     success = false;
-    
+
     return res.status(500).json({
       success: false,
       reply,
       error: true,
     });
-    
+
   } finally {
     // 9. Always log the interaction (success or failure)
     if (userId && reply) {
       const userMessage = req.body.messages?.[req.body.messages.length - 1]?.content || '';
-      
+
       // Log asynchronously, don't block response
       logInteraction({
         userId,
@@ -188,7 +199,10 @@ async function askController(req, res, next) {
         issues,
         toneIssues,
       }).catch(logErr => {
-        console.error('[Ask Controller] Failed to log interaction:', logErr.message);
+        logger.error('Failed to log AI interaction', {
+          error: logErr.message,
+          userIdMasked: logger.maskUserId(userId),
+        });
       });
     }
   }

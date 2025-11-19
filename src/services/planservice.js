@@ -1,11 +1,12 @@
 /**
  * Plan Service
- * 
+ *
  * Handles CRUD operations for training/nutrition plans in Supabase.
  * Supports version history and RLS-based access control.
  */
 
 const { supabaseAdmin } = require('../lib/supabaseServer');
+const logger = require('../lib/logger');
 
 const TABLE = 'plans';
 
@@ -48,14 +49,24 @@ async function savePlan(userId, planData, options = {}) {
       .single();
 
     if (error) {
-      console.error('❌ Error saving plan:', error);
+      logger.error('Database error saving plan', {
+        error: error.message,
+        userIdMasked: logger.maskUserId(userId),
+      });
       throw error;
     }
 
-    console.log(`✅ Plan saved successfully for user ${userId}, version ${nextVersion}`);
+    logger.info('Plan saved successfully', {
+      userIdMasked: logger.maskUserId(userId),
+      version: nextVersion,
+      generationMethod: options.generationMethod || 'ai',
+    });
     return data;
   } catch (error) {
-    console.error('❌ Failed to save plan:', error);
+    logger.error('Failed to save plan', {
+      error: error.message,
+      userIdMasked: logger.maskUserId(userId),
+    });
     throw error;
   }
 }
@@ -76,13 +87,19 @@ async function getLatestPlan(userId) {
       .maybeSingle();
 
     if (error) {
-      console.error('❌ Error fetching latest plan:', error);
+      logger.error('Database error fetching latest plan', {
+        error: error.message,
+        userIdMasked: logger.maskUserId(userId),
+      });
       throw error;
     }
 
     return data;
   } catch (error) {
-    console.error('❌ Failed to get latest plan:', error);
+    logger.error('Failed to get latest plan', {
+      error: error.message,
+      userIdMasked: logger.maskUserId(userId),
+    });
     throw error;
   }
 }
@@ -103,13 +120,21 @@ async function getPlanByVersion(userId, version) {
       .maybeSingle();
 
     if (error) {
-      console.error('❌ Error fetching plan by version:', error);
+      logger.error('Database error fetching plan by version', {
+        error: error.message,
+        userIdMasked: logger.maskUserId(userId),
+        version,
+      });
       throw error;
     }
 
     return data;
   } catch (error) {
-    console.error('❌ Failed to get plan by version:', error);
+    logger.error('Failed to get plan by version', {
+      error: error.message,
+      userIdMasked: logger.maskUserId(userId),
+      version,
+    });
     throw error;
   }
 }
@@ -130,13 +155,21 @@ async function getVersionHistory(userId, limit = 5) {
       .limit(limit);
 
     if (error) {
-      console.error('❌ Error fetching version history:', error);
+      logger.error('Database error fetching version history', {
+        error: error.message,
+        userIdMasked: logger.maskUserId(userId),
+        limit,
+      });
       throw error;
     }
 
     return data || [];
   } catch (error) {
-    console.error('❌ Failed to get version history:', error);
+    logger.error('Failed to get version history', {
+      error: error.message,
+      userIdMasked: logger.maskUserId(userId),
+      limit,
+    });
     throw error;
   }
 }
@@ -160,14 +193,20 @@ async function updatePlan(planId, updates) {
       .single();
 
     if (error) {
-      console.error('❌ Error updating plan:', error);
+      logger.error('Database error updating plan', {
+        error: error.message,
+        planId,
+      });
       throw error;
     }
 
-    console.log(`✅ Plan ${planId} updated successfully`);
+    logger.info('Plan updated successfully', { planId });
     return data;
   } catch (error) {
-    console.error('❌ Failed to update plan:', error);
+    logger.error('Failed to update plan', {
+      error: error.message,
+      planId,
+    });
     throw error;
   }
 }
@@ -185,14 +224,20 @@ async function deletePlan(planId) {
       .eq('id', planId);
 
     if (error) {
-      console.error('❌ Error deleting plan:', error);
+      logger.error('Database error deleting plan', {
+        error: error.message,
+        planId,
+      });
       throw error;
     }
 
-    console.log(`✅ Plan ${planId} deleted successfully`);
+    logger.info('Plan deleted successfully', { planId });
     return true;
   } catch (error) {
-    console.error('❌ Failed to delete plan:', error);
+    logger.error('Failed to delete plan', {
+      error: error.message,
+      planId,
+    });
     throw error;
   }
 }

@@ -1,10 +1,11 @@
 /**
  * Weight Logs Service
- * 
+ *
  * Handles weight tracking operations in Supabase
  */
 
 const { supabaseAdmin } = require('../../lib/supabaseServer');
+const logger = require('../../lib/logger');
 
 const TABLE = 'weight_logs';
 
@@ -72,7 +73,12 @@ async function logWeight(userId, weightData) {
     .single();
 
   if (error) {
-    console.error('Error logging weight:', error.message);
+    logger.error('Error logging weight', {
+      operation: 'insert',
+      dataType: 'weight',
+      userId: logger.maskUserId(userId),
+      error: error.message
+    });
     throw error;
   }
 
@@ -103,7 +109,12 @@ async function getUserWeightLogs(userId, limit = null) {
   const { data, error } = await query;
 
   if (error) {
-    console.error('Error fetching weight logs:', error);
+    logger.error('Error fetching weight logs', {
+      operation: 'read',
+      dataType: 'weight',
+      userId: logger.maskUserId(userId),
+      error: error.message || error
+    });
     throw error;
   }
 

@@ -5,6 +5,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { config } = require('../config');
+const logger = require('./logger');
 
 // Create Supabase client for JWT verification (with fallback for missing config)
 let supabase = null;
@@ -14,7 +15,7 @@ try {
     supabase = createClient(config.supabase.url, config.supabase.anonKey);
   }
 } catch (error) {
-  console.warn('Supabase client initialization failed:', error.message);
+  logger.warn('Supabase client initialization failed', { error: error.message });
 }
 
 /**
@@ -60,7 +61,7 @@ async function authenticateJWT(req, res, next) {
     
     next();
   } catch (error) {
-    console.error('JWT authentication error:', error.message);
+    logger.error('JWT authentication failed', { error: error.message });
     return res.status(401).json({
       ok: false,
       code: 'ERR_AUTH_FAILED',
@@ -96,7 +97,7 @@ async function optionalAuth(req, res, next) {
     next();
   } catch (error) {
     // For optional auth, we don't fail on errors
-    console.warn('Optional auth warning:', error.message);
+    logger.warn('Optional auth failed (non-blocking)', { error: error.message });
     next();
   }
 }

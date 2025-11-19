@@ -16,13 +16,11 @@ const dashboardMetricsService = require('./services/dashboardMetricsService');
 const { errors, warnings } = validateConfig();
 
 if (warnings.length > 0) {
-  console.warn('⚠️ Configuration warnings:');
-  warnings.forEach(warning => console.warn(`  - ${warning}`));
+  logger.warn('Configuration warnings detected', { warnings });
 }
 
 if (errors.length > 0) {
-  console.error('❌ Configuration errors:');
-  errors.forEach(error => console.error(`  - ${error}`));
+  logger.error('Configuration errors detected', { errors });
   process.exit(1);
 }
 
@@ -167,16 +165,13 @@ app.use((req, res) => {
 
 // Start server
 const server = app.listen(config.port, () => {
-  logger.info('Server started', {
+  logger.info('Server started successfully', {
     port: config.port,
     env: config.nodeEnv,
     version: require('../package.json').version,
+    supabaseConfigured: !!config.supabase.url,
+    dualWriteEnabled: config.dualWrite,
   });
-  
-  console.log(`🚀 STRUKT System running on port ${config.port}`);
-  console.log(`📋 Environment: ${config.nodeEnv}`);
-  console.log(`🔧 Supabase: ${config.supabase.url ? '✅ Connected' : '❌ Not configured'}`);
-  console.log(`🔄 Dual-write: ${config.dualWrite ? '✅ Enabled' : '❌ Disabled'}`);
 });
 
 // Graceful shutdown

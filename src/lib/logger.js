@@ -27,6 +27,20 @@ function maskUserId(userId) {
 }
 
 /**
+ * Mask email for privacy (show first 2 chars of local + domain)
+ */
+function maskEmail(email) {
+  if (!email || typeof email !== 'string') {
+    return 'undefined';
+  }
+  const [local, domain] = email.split('@');
+  if (!local || !domain) {
+    return '***@***';
+  }
+  return `${local.substring(0, 2)}***@${domain}`;
+}
+
+/**
  * Generate request ID for tracing
  */
 function generateRequestId() {
@@ -75,9 +89,10 @@ const logger = {
   warn: (message, meta) => log('warn', message, meta),
   info: (message, meta) => log('info', message, meta),
   debug: (message, meta) => log('debug', message, meta),
-  
+
   // Utility functions
   maskUserId,
+  maskEmail,
   generateRequestId,
   
   // Express middleware for request logging

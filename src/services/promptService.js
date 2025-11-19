@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { supabaseAdmin } = require('../lib/supabaseServer');
 const { searchSimilarLogs } = require('./embeddingService');
+const logger = require('../lib/logger');
 
 // Cache for static system prompt
 let cachedSystemPrompt = null;
@@ -59,7 +60,10 @@ function isCacheValid() {
     }
   } catch (err) {
     // If we can't check file stats, invalidate cache to be safe
-    console.warn('Failed to check prompt file modification time:', err.message);
+    logger.warn('Failed to check prompt file modification time', {
+      error: err.message,
+      filePath: getPromptFilePath()
+    });
     return false;
   }
 
@@ -83,7 +87,11 @@ function loadSystemPrompt() {
     
     return content;
   } catch (err) {
-    console.error('Failed to load system prompt from file:', err);
+    logger.error('Failed to load system prompt from file', {
+      error: err.message,
+      stack: err.stack,
+      filePath: getPromptFilePath()
+    });
     throw new Error(`Failed to load system prompt: ${err.message}`);
   }
 }
@@ -142,13 +150,21 @@ async function fetchRecentLogs(userId) {
       .limit(20);
 
     if (error) {
-      console.error('Failed to fetch recent logs:', error);
+      logger.error('Failed to fetch recent logs', {
+        userId: logger.maskUserId(userId),
+        error: error.message,
+        code: error.code
+      });
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error('Exception while fetching recent logs:', error);
+    logger.error('Exception while fetching recent logs', {
+      userId: logger.maskUserId(userId),
+      error: error.message,
+      stack: error.stack
+    });
     return [];
   }
 }
@@ -171,13 +187,23 @@ async function fetchWeeklySummaries(userId, limit = 4) {
       .limit(limit);
 
     if (error) {
-      console.error('Failed to fetch weekly summaries:', error);
+      logger.error('Failed to fetch weekly summaries', {
+        userId: logger.maskUserId(userId),
+        limit,
+        error: error.message,
+        code: error.code
+      });
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error('Exception while fetching weekly summaries:', error);
+    logger.error('Exception while fetching weekly summaries', {
+      userId: logger.maskUserId(userId),
+      limit,
+      error: error.message,
+      stack: error.stack
+    });
     return [];
   }
 }
@@ -204,7 +230,12 @@ async function fetchRelevantPastLogs(userId, queryText) {
 
     return results;
   } catch (error) {
-    console.error('Exception while fetching relevant past logs:', error);
+    logger.error('Exception while fetching relevant past logs', {
+      userId: logger.maskUserId(userId),
+      queryLength: queryText?.length,
+      error: error.message,
+      stack: error.stack
+    });
     return [];
   }
 }
@@ -373,7 +404,11 @@ async function buildCompletePrompt(userData = {}) {
     
     return systemPrompt;
   } catch (err) {
-    console.error('Failed to build complete prompt:', err);
+    logger.error('Failed to build complete prompt', {
+      error: err.message,
+      stack: err.stack,
+      hasUserData: !!userData
+    });
     // Return a minimal fallback prompt
     return 'You are a health and fitness coach. Provide helpful, safe advice.';
   }

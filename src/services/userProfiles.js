@@ -1,11 +1,12 @@
 /**
  * User Profiles Service
- * 
+ *
  * Handles user profile operations in Supabase with optional dual-write to Airtable.
  * Implements the mapping from Airtable fields to Supabase schema.
  */
 
 const { supabaseAdmin } = require('../lib/supabaseServer');
+const logger = require('../lib/logger');
 
 const TABLE = 'user_profiles';
 
@@ -76,13 +77,19 @@ async function getUserProfile(userId) {
       .maybeSingle();
 
     if (error) {
-      console.error('Error fetching user profile:', error);
+      logger.error('Database error fetching user profile', {
+        error: error.message,
+        userIdMasked: logger.maskUserId(userId),
+      });
       throw error;
     }
 
     return data;
   } catch (error) {
-    console.error('getUserProfile failed:', error);
+    logger.error('Failed to get user profile', {
+      error: error.message,
+      userIdMasked: logger.maskUserId(userId),
+    });
     throw error;
   }
 }
@@ -124,7 +131,10 @@ async function upsertUserProfile(userId, patch) {
       .single();
 
     if (error) {
-      console.error('Error upserting user profile:', error);
+      logger.error('Database error upserting user profile', {
+        error: error.message,
+        userIdMasked: logger.maskUserId(userId),
+      });
       throw error;
     }
 
@@ -132,16 +142,26 @@ async function upsertUserProfile(userId, patch) {
     if (DUAL_WRITE) {
       try {
         await writeToAirtable(userId, sanitizedPatch);
-        console.log('✅ Dual-write to Airtable successful for user:', userId.substring(0, 8) + '...');
+        logger.info('Airtable sync completed', {
+          userIdMasked: logger.maskUserId(userId),
+          syncType: 'dual-write',
+        });
       } catch (airtableError) {
-        console.error('⚠️ Dual-write to Airtable failed (non-blocking):', airtableError.message);
+        logger.warn('Airtable sync failed (non-blocking)', {
+          error: airtableError.message,
+          userIdMasked: logger.maskUserId(userId),
+          syncType: 'dual-write',
+        });
         // Don't throw - dual-write failures shouldn't break the primary operation
       }
     }
 
     return data;
   } catch (error) {
-    console.error('upsertUserProfile failed:', error.message);
+    logger.error('Failed to upsert user profile', {
+      error: error.message,
+      userIdMasked: logger.maskUserId(userId),
+    });
     throw error;
   }
 }
@@ -168,12 +188,11 @@ async function writeToAirtable(userId, profileData) {
   // Set external_id to map to user_id in Supabase
   airtablePayload['external_id'] = userId;
 
-  // Don't log full userId for security
-  console.log('📝 Airtable dual-write payload:', { 
-    userId: userId.substring(0, 8) + '...', 
-    fields: Object.keys(airtablePayload) 
+  logger.debug('Preparing Airtable dual-write', {
+    userIdMasked: logger.maskUserId(userId),
+    fieldCount: Object.keys(airtablePayload).length,
   });
-  
+
   // Note: The actual Airtable write implementation would go here
   // For now, we just log the payload that would be written
   // In full implementation, this would use the existing Airtable utilities

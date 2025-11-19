@@ -7,6 +7,7 @@
 
 const { OpenAI } = require('openai');
 const { supabaseAdmin } = require('../lib/supabaseServer');
+const logger = require('../lib/logger');
 
 // Initialize OpenAI client
 let openai = null;
@@ -18,7 +19,7 @@ try {
     });
   }
 } catch (error) {
-  console.warn('OpenAI client initialization failed:', error.message);
+  logger.warn('OpenAI client initialization failed', { error: error.message });
 }
 
 /**
@@ -48,7 +49,7 @@ async function generateEmbedding(text) {
 
     return response.data[0].embedding;
   } catch (error) {
-    console.error('Failed to generate embedding:', error);
+    logger.error('Failed to generate embedding', { error: error.message });
     throw new Error(`Embedding generation failed: ${error.message}`);
   }
 }
@@ -82,13 +83,20 @@ async function storeLogEmbedding({ userId, logType, logId, text }) {
       .single();
 
     if (error) {
-      console.error('Failed to store embedding:', error);
+      logger.error('Failed to store embedding', {
+        userIdMasked: logger.maskUserId(userId),
+        logType,
+        error: error.message
+      });
       return null;
     }
 
     return data;
   } catch (error) {
-    console.error('Exception while storing embedding:', error);
+    logger.error('Exception while storing embedding', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message
+    });
     return null;
   }
 }
@@ -125,7 +133,10 @@ async function searchSimilarLogs({ userId, queryText, limit = 3, daysBack = 90 }
     if (error) {
       // If RPC doesn't exist, fall back to manual query
       // This is for testing purposes - in production the RPC should exist
-      console.warn('RPC search_similar_logs not found, using fallback query');
+      logger.warn('RPC search_similar_logs not found, using fallback query', {
+        userIdMasked: logger.maskUserId(userId),
+        error: error.message
+      });
       
       const { data: fallbackData, error: fallbackError } = await supabaseAdmin
         .from('log_embeddings')
@@ -135,7 +146,10 @@ async function searchSimilarLogs({ userId, queryText, limit = 3, daysBack = 90 }
         .limit(limit);
 
       if (fallbackError) {
-        console.error('Failed to search similar logs:', fallbackError);
+        logger.error('Failed to search similar logs', {
+          userIdMasked: logger.maskUserId(userId),
+          error: fallbackError.message
+        });
         return [];
       }
 
@@ -144,7 +158,10 @@ async function searchSimilarLogs({ userId, queryText, limit = 3, daysBack = 90 }
 
     return data || [];
   } catch (error) {
-    console.error('Exception while searching similar logs:', error);
+    logger.error('Exception while searching similar logs', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message
+    });
     return [];
   }
 }

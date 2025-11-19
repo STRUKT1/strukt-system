@@ -1,11 +1,12 @@
 /**
  * Coach Log Service
- * 
+ *
  * Logs all AI coach interactions to Supabase for audit trail, debugging,
  * and quality monitoring.
  */
 
 const { supabaseAdmin } = require('../lib/supabaseServer');
+const logger = require('../lib/logger');
 
 /**
  * Safely truncate text to a maximum length
@@ -72,29 +73,29 @@ async function logInteraction({
       .single();
 
     if (error) {
-      console.error('Failed to log AI interaction to Supabase:', error);
-      // Fallback to console logging
-      console.log('[AI Coach Log - DB Failed]', {
-        userId,
+      logger.error('Failed to log AI interaction to Supabase', {
+        userId: logger.maskUserId(userId),
         sessionId,
         success,
         messageLength: userMessage?.length,
         responseLength: aiResponse?.length,
-        issues,
-        toneIssues,
+        issuesCount: issues?.length || 0,
+        toneIssuesCount: toneIssues?.length || 0,
+        error: error.message,
+        code: error.code
       });
       return null;
     }
 
     return data;
   } catch (err) {
-    // Catch any unexpected errors and log to console as fallback
-    console.error('Exception while logging AI interaction:', err);
-    console.log('[AI Coach Log - Exception]', {
-      userId,
+    // Catch any unexpected errors
+    logger.error('Exception while logging AI interaction', {
+      userId: logger.maskUserId(userId),
       sessionId,
       success,
       error: err.message,
+      stack: err.stack
     });
     return null;
   }
@@ -127,13 +128,24 @@ async function getUserLogs(userId, options = {}) {
     const { data, error } = await query;
 
     if (error) {
-      console.error('Failed to retrieve user logs:', error);
+      logger.error('Failed to retrieve user logs', {
+        userId: logger.maskUserId(userId),
+        limit,
+        sessionId,
+        error: error.message,
+        code: error.code
+      });
       return [];
     }
 
     return data || [];
   } catch (err) {
-    console.error('Exception while retrieving user logs:', err);
+    logger.error('Exception while retrieving user logs', {
+      userId: logger.maskUserId(userId),
+      limit,
+      error: err.message,
+      stack: err.stack
+    });
     return [];
   }
 }
@@ -169,7 +181,11 @@ async function getUserStats(userId) {
 
     return stats;
   } catch (err) {
-    console.error('Exception while calculating user stats:', err);
+    logger.error('Exception while calculating user stats', {
+      userId: logger.maskUserId(userId),
+      error: err.message,
+      stack: err.stack
+    });
     return { total: 0, successful: 0, failed: 0, totalTokens: 0, issuesCount: 0 };
   }
 }

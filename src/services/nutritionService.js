@@ -6,6 +6,7 @@
 
 const { supabaseAdmin } = require('../lib/supabaseServer');
 const { getUserProfile } = require('./userProfiles');
+const logger = require('../lib/logger');
 
 /**
  * Get nutrition summary for a user with timezone support
@@ -46,7 +47,11 @@ async function getNutritionSummary(userId, range = 'today', timezone = 'UTC') {
       targets,
     };
   } catch (error) {
-    console.error('Error getting nutrition summary:', error);
+    logger.error('Error getting nutrition summary', {
+      userIdMasked: logger.maskUserId(userId),
+      range,
+      error: error.message
+    });
     throw error;
   }
 }
@@ -62,7 +67,11 @@ async function getTodayNutrition(userId, timezone) {
 
   if (error) {
     // Fallback to direct query if RPC doesn't exist
-    console.warn('RPC function not found, using direct query:', error.message);
+    logger.warn('RPC function not found, using direct query', {
+      userIdMasked: logger.maskUserId(userId),
+      function: 'get_today_nutrition',
+      error: error.message
+    });
     return await getTodayNutritionDirect(userId, timezone);
   }
 
@@ -122,7 +131,11 @@ async function getSevenDayNutrition(userId, timezone) {
 
   if (error) {
     // Fallback to direct query if RPC doesn't exist
-    console.warn('RPC function not found, using direct query:', error.message);
+    logger.warn('RPC function not found, using direct query', {
+      userIdMasked: logger.maskUserId(userId),
+      function: 'get_seven_day_nutrition',
+      error: error.message
+    });
     return await getSevenDayNutritionDirect(userId, timezone);
   }
 
