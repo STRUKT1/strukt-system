@@ -5,6 +5,7 @@
 
 const express = require('express');
 const { authenticateJWT } = require('../lib/auth');
+const { requireOpenAIConsent } = require('../lib/gdprConsent');
 const { getUserProfile } = require('../services/userProfiles');
 const { getUserWeightLogs } = require('../services/logs/weight');
 const { generateInitialPlans, generateDailyFocus, generateWeeklyReview } = require('../services/aiExtensions');
@@ -19,7 +20,7 @@ const planLimiter = createPlanGenerationLimiter();
  * POST /v1/plans/generate
  * Generate initial workout and nutrition plans based on user profile
  */
-router.post('/v1/plans/generate', authenticateJWT, planLimiter, async (req, res) => {
+router.post('/v1/plans/generate', authenticateJWT, planLimiter, requireOpenAIConsent, async (req, res) => {
   try {
     logger.info('Plan generation requested', {
       requestId: req.requestId,
