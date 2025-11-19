@@ -1,11 +1,12 @@
 /**
  * AI Service Extensions
- * 
+ *
  * Provides specialized AI functions for intent recognition, entity extraction,
  * and vision analysis using OpenAI GPT-4o
  */
 
 const { OpenAI } = require('openai');
+const logger = require('../lib/logger');
 
 // Initialize OpenAI client with error handling
 let openai = null;
@@ -17,7 +18,10 @@ try {
     });
   }
 } catch (error) {
-  console.warn('OpenAI client initialization failed:', error.message);
+  logger.warn('OpenAI client initialization failed', {
+    error: error.message,
+    hasApiKey: !!process.env.OPENAI_API_KEY
+  });
 }
 
 /**
@@ -81,10 +85,13 @@ Your JSON response:`;
     
     // Parse the JSON response
     const result = JSON.parse(responseText);
-    
+
     return result;
   } catch (error) {
-    console.error('Intent recognition error:', error.message);
+    logger.error('Intent recognition error', {
+      error: error.message,
+      messageLength: message?.length
+    });
     // Default to chat if parsing fails
     return { intent: 'chat' };
   }
@@ -119,10 +126,13 @@ async function analyzeWorkoutImage(imageUrl) {
 
     const responseText = completion.choices[0].message.content.trim();
     const result = JSON.parse(responseText);
-    
+
     return result;
   } catch (error) {
-    console.error('Workout image analysis error:', error.message);
+    logger.error('Workout image analysis error', {
+      error: error.message,
+      hasImageUrl: !!imageUrl
+    });
     throw new Error('Failed to analyze workout image');
   }
 }
@@ -156,10 +166,13 @@ async function analyzeMealImage(imageUrl) {
 
     const responseText = completion.choices[0].message.content.trim();
     const result = JSON.parse(responseText);
-    
+
     return result;
   } catch (error) {
-    console.error('Meal image analysis error:', error.message);
+    logger.error('Meal image analysis error', {
+      error: error.message,
+      hasImageUrl: !!imageUrl
+    });
     throw new Error('Failed to analyze meal image');
   }
 }
@@ -217,10 +230,14 @@ Respond ONLY with a valid JSON object:
 
     const responseText = completion.choices[0].message.content.trim();
     const result = JSON.parse(responseText);
-    
+
     return result;
   } catch (error) {
-    console.error('Plan generation error:', error.message);
+    logger.error('Plan generation error', {
+      error: error.message,
+      hasUserProfile: !!userProfile,
+      primaryGoal: userProfile?.primary_goal
+    });
     throw new Error('Failed to generate plans');
   }
 }
@@ -263,7 +280,11 @@ Provide a personalized, motivating focus point:`;
     const focusText = completion.choices[0].message.content.trim();
     return focusText;
   } catch (error) {
-    console.error('Daily focus generation error:', error.message);
+    logger.error('Daily focus generation error', {
+      error: error.message,
+      hasUserProfile: !!userProfile,
+      hasRecentActivity: !!recentActivity
+    });
     throw new Error('Failed to generate daily focus');
   }
 }
@@ -309,7 +330,12 @@ Provide an insightful weekly review (3-5 sentences) that:
     const reviewText = completion.choices[0].message.content.trim();
     return reviewText;
   } catch (error) {
-    console.error('Weekly review generation error:', error.message);
+    logger.error('Weekly review generation error', {
+      error: error.message,
+      hasUserProfile: !!userProfile,
+      hasWeeklyLogs: !!weeklyLogs,
+      workoutCount: weeklyLogs?.workouts?.length || 0
+    });
     throw new Error('Failed to generate weekly review');
   }
 }

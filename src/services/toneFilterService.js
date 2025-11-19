@@ -1,9 +1,11 @@
 /**
  * Tone Filter Service
- * 
+ *
  * Validates AI responses for tone safety, inclusivity, and ethical guidelines.
  * Ensures every AI Coach reply is safe, non-judgmental, inclusive, and contextually aware.
  */
+
+const logger = require('../lib/logger');
 
 // Define tone safety rules as pattern-based checks
 const TONE_SAFETY_RULES = [
@@ -167,8 +169,11 @@ function checkToneSafety(response) {
       const match = response.match(rule.pattern);
       if (match) {
         const excerpt = getExcerpt(response, match.index, 100);
-        console.warn(`⚠️ Tone safety issue detected: ${rule.issue} (${rule.severity})`);
-        console.warn(`   Excerpt: "${excerpt}"`);
+        logger.warn('Tone safety issue detected', {
+          issue: rule.issue,
+          severity: rule.severity,
+          excerpt: excerpt.substring(0, 100), // Limit excerpt length for logs
+        });
       }
     }
   }

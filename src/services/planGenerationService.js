@@ -17,6 +17,7 @@ const { getAIReply, getFallbackResponse } = require('../../services/openaiServic
 const { getUserProfile } = require('./userProfiles');
 const { savePlan, getLatestPlan } = require('./planservice');
 const { supabaseAdmin } = require('../lib/supabaseServer');
+const logger = require('../lib/logger');
 
 // Environment flags
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -229,7 +230,10 @@ async function buildWellnessContext(userId) {
 
     return context;
   } catch (error) {
-    console.warn('⚠️ Failed to build full wellness context:', error.message);
+    logger.warn('Failed to build full wellness context', {
+      error: error.message,
+      operation: 'build-wellness-context'
+    });
     // Return minimal context on error
     return {
       recent_activity: { workouts: [], meals: [], sleep: [], mood: [] },
@@ -286,7 +290,10 @@ function buildPlanPrompt(profile, wellnessContext) {
   
   // Log warning if critical fields are missing
   if (!profile?.user_id) {
-    console.warn('⚠️ Profile missing user_id - plan may not be saved correctly');
+    logger.warn('Profile missing user_id - plan may not be saved correctly', {
+      operation: 'build-plan-prompt',
+      issue: 'missing-user-id'
+    });
   }
 
   return `Generate a comprehensive personalized fitness and nutrition plan for ${fullName}.
@@ -342,7 +349,10 @@ function parseAIResponse(aiResponse) {
     const plan = JSON.parse(jsonStr);
     return plan;
   } catch (error) {
-    console.error('❌ Failed to parse AI response as JSON:', error.message);
+    logger.error('Failed to parse AI response as JSON', {
+      error: error.message,
+      operation: 'parse-ai-response'
+    });
     throw new Error('AI response is not valid JSON');
   }
 }
@@ -362,7 +372,10 @@ async function regenerateFromProfileWithWellness(userId, options = {}) {
   }
 
   try {
-    console.log(`🔄 Generating plan for user ${userId}...`);
+    logger.info('Generating plan for user', {
+      userIdMasked: logger.maskUserId(userId),
+      operation: 'plan-generation'
+    });
 
     // Step 1: Fetch user profile with null guards
     const profile = await getUserProfile(userId);
@@ -371,7 +384,10 @@ async function regenerateFromProfileWithWellness(userId, options = {}) {
     }
 
     // Step 2: Build wellness context
-    console.log('📊 Building wellness context...');
+    logger.info('Building wellness context', {
+      userIdMasked: logger.maskUserId(userId),
+      operation: 'build-wellness-context'
+    });
     const wellnessContext = await buildWellnessContext(userId);
 
     // Step 3: Build AI prompt
@@ -385,7 +401,11 @@ async function regenerateFromProfileWithWellness(userId, options = {}) {
     let validationErrors = null;
 
     try {
-      console.log('🤖 Requesting AI-generated plan...');
+      logger.info('Requesting AI-generated plan', {
+        userIdMasked: logger.maskUserId(userId),
+        operation: 'ai-plan-request',
+        model: 'gpt-4o'
+      });
       const aiResponse = await getAIReply([
         { role: 'user', content: prompt }
       ], {
@@ -400,15 +420,30 @@ async function regenerateFromProfileWithWellness(userId, options = {}) {
       // Validate plan structure
       const validation = validatePlanStructure(planData);
       if (!validation.isValid) {
-        console.warn('⚠️ AI plan validation failed:', validation.errors);
+        logger.warn('AI plan validation failed', {
+          userIdMasked: logger.maskUserId(userId),
+          operation: 'validate-ai-plan',
+          errors: validation.errors
+        });
         throw new Error(`AI plan structure invalid: ${validation.errors.join(', ')}`);
       }
 
-      console.log('✅ AI plan generated and validated successfully');
+      logger.info('AI plan generated and validated successfully', {
+        userIdMasked: logger.maskUserId(userId),
+        operation: 'ai-plan-validation',
+        status: 'success'
+      });
     } catch (aiError) {
-      console.error('❌ AI plan generation failed:', aiError.message);
-      console.log('🔄 Using fallback plan generation...');
-      
+      logger.error('AI plan generation failed', {
+        userIdMasked: logger.maskUserId(userId),
+        operation: 'ai-plan-generation',
+        error: aiError.message
+      });
+      logger.info('Using fallback plan generation', {
+        userIdMasked: logger.maskUserId(userId),
+        operation: 'fallback-plan-generation'
+      });
+
       // Generate fallback plan
       planData = generateFallbackPlan(profile);
       generationMethod = 'fallback';
@@ -419,14 +454,22 @@ async function regenerateFromProfileWithWellness(userId, options = {}) {
       isValid = validation.isValid;
       if (!validation.isValid) {
         validationErrors = validation.errors;
-        console.warn('⚠️ Even fallback plan has validation issues:', validationErrors);
+        logger.warn('Even fallback plan has validation issues', {
+          userIdMasked: logger.maskUserId(userId),
+          operation: 'validate-fallback-plan',
+          errors: validationErrors
+        });
       }
     }
 
     // Step 5: Preview mode - just log and return without saving
     if (previewMode) {
-      console.log('🔍 PREVIEW MODE - Plan generated but NOT saved:');
-      console.log(JSON.stringify(planData, null, 2));
+      logger.info('PREVIEW MODE - Plan generated but NOT saved', {
+        userIdMasked: logger.maskUserId(userId),
+        operation: 'preview-mode',
+        generationMethod,
+        planData
+      });
       return {
         plan: planData,
         metadata: {
@@ -443,8 +486,12 @@ async function regenerateFromProfileWithWellness(userId, options = {}) {
 
     // Step 6: Save plan to database (both AI and fallback plans)
     if (saveResult) {
-      console.log(`💾 Saving plan to database (method: ${generationMethod})...`);
-      
+      logger.info('Saving plan to database', {
+        userIdMasked: logger.maskUserId(userId),
+        operation: 'save-plan',
+        generationMethod
+      });
+
       const savedPlan = await savePlan(userId, planData, {
         generationMethod,
         fallbackReason,
@@ -454,8 +501,14 @@ async function regenerateFromProfileWithWellness(userId, options = {}) {
         validationErrors
       });
 
-      console.log(`✅ Plan saved successfully - ID: ${savedPlan.id}, Version: ${savedPlan.version}`);
-      
+      logger.info('Plan saved successfully', {
+        userIdMasked: logger.maskUserId(userId),
+        operation: 'save-plan',
+        planId: savedPlan.id,
+        version: savedPlan.version,
+        generationMethod
+      });
+
       return {
         plan: planData,
         metadata: {
@@ -486,7 +539,12 @@ async function regenerateFromProfileWithWellness(userId, options = {}) {
     };
 
   } catch (error) {
-    console.error('❌ Plan generation failed completely:', error);
+    logger.error('Plan generation failed completely', {
+      userIdMasked: logger.maskUserId(userId),
+      operation: 'plan-generation',
+      error: error.message,
+      stack: error.stack
+    });
     throw error;
   }
 }
@@ -499,7 +557,10 @@ async function regenerateFromProfileWithWellness(userId, options = {}) {
  */
 async function regenerateFromProfile(userId, options = {}) {
   // This method now always includes wellness context for consistency
-  console.log('📝 regenerateFromProfile called - wellness context will be included');
+  logger.info('regenerateFromProfile called - wellness context will be included', {
+    userIdMasked: logger.maskUserId(userId),
+    operation: 'regenerate-from-profile'
+  });
   return regenerateFromProfileWithWellness(userId, options);
 }
 

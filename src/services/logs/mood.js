@@ -1,10 +1,11 @@
 /**
  * Mood Logs Service
- * 
+ *
  * Handles mood logging operations in Supabase with optional dual-write to Airtable.
  */
 
 const { supabaseAdmin } = require('../../lib/supabaseServer');
+const logger = require('../../lib/logger');
 
 const TABLE = 'mood_logs';
 
@@ -67,7 +68,11 @@ async function logMood(userId, moodData) {
     .single();
 
   if (error) {
-    console.error('Error logging mood:', error.message);
+    logger.error('Error logging mood', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message,
+      operation: 'logMood'
+    });
     throw error;
   }
 
@@ -75,9 +80,18 @@ async function logMood(userId, moodData) {
   if (DUAL_WRITE) {
     try {
       await writeMoodToAirtable(userId, sanitizedData);
-      console.log('✅ Mood dual-write to Airtable successful');
+      logger.info('Airtable sync completed', {
+        userIdMasked: logger.maskUserId(userId),
+        syncType: 'dual-write',
+        dataType: 'mood'
+      });
     } catch (airtableError) {
-      console.error('⚠️ Mood dual-write to Airtable failed (non-blocking):', airtableError.message);
+      logger.warn('Airtable sync failed (non-blocking)', {
+        userIdMasked: logger.maskUserId(userId),
+        syncType: 'dual-write',
+        dataType: 'mood',
+        error: airtableError.message
+      });
       // Don't throw - dual-write failures shouldn't break the primary operation
     }
   }
@@ -96,9 +110,11 @@ async function writeMoodToAirtable(userId, moodData) {
   if (moodData.notes) airtablePayload['Notes'] = moodData.notes;
   if (moodData.date) airtablePayload['Date'] = moodData.date;
 
-  console.log('📝 Mood Airtable dual-write payload:', { 
-    userId: userId.substring(0, 8) + '...', 
-    fields: Object.keys(airtablePayload) 
+  logger.debug('Preparing Airtable dual-write payload', {
+    userIdMasked: logger.maskUserId(userId),
+    syncType: 'dual-write',
+    dataType: 'mood',
+    fields: Object.keys(airtablePayload)
   });
   
   // Note: Actual Airtable write implementation would go here

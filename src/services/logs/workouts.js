@@ -1,10 +1,11 @@
 /**
  * Workouts Service
- * 
+ *
  * Handles workout logging operations in Supabase with optional dual-write to Airtable.
  */
 
 const { supabaseAdmin } = require('../../lib/supabaseServer');
+const logger = require('../../lib/logger');
 
 const TABLE = 'workouts';
 
@@ -73,7 +74,11 @@ async function logWorkout(userId, workoutData) {
     .single();
 
   if (error) {
-    console.error('Error logging workout:', error.message);
+    logger.error('Error logging workout', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message,
+      operation: 'logWorkout'
+    });
     throw error;
   }
 
@@ -81,9 +86,18 @@ async function logWorkout(userId, workoutData) {
   if (DUAL_WRITE) {
     try {
       await writeWorkoutToAirtable(userId, sanitizedData);
-      console.log('✅ Workout dual-write to Airtable successful');
+      logger.info('Airtable sync completed', {
+        userIdMasked: logger.maskUserId(userId),
+        syncType: 'dual-write',
+        dataType: 'workout'
+      });
     } catch (airtableError) {
-      console.error('⚠️ Workout dual-write to Airtable failed (non-blocking):', airtableError.message);
+      logger.warn('Airtable sync failed (non-blocking)', {
+        userIdMasked: logger.maskUserId(userId),
+        syncType: 'dual-write',
+        dataType: 'workout',
+        error: airtableError.message
+      });
       // Don't throw - dual-write failures shouldn't break the primary operation
     }
   }
@@ -105,9 +119,11 @@ async function writeWorkoutToAirtable(userId, workoutData) {
   if (workoutData.notes) airtablePayload['Notes'] = workoutData.notes;
   if (workoutData.date) airtablePayload['Date'] = workoutData.date;
 
-  console.log('📝 Workout Airtable dual-write payload:', { 
-    userId: userId.substring(0, 8) + '...', 
-    fields: Object.keys(airtablePayload) 
+  logger.debug('Preparing Airtable dual-write payload', {
+    userIdMasked: logger.maskUserId(userId),
+    syncType: 'dual-write',
+    dataType: 'workout',
+    fields: Object.keys(airtablePayload)
   });
   
   // Note: Actual Airtable write implementation would go here
@@ -128,7 +144,11 @@ async function getUserWorkouts(userId, limit = 20) {
     .limit(limit);
 
   if (error) {
-    console.error('Error fetching workouts:', error);
+    logger.error('Error fetching workouts', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message,
+      operation: 'getUserWorkouts'
+    });
     throw error;
   }
 

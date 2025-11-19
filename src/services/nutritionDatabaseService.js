@@ -17,7 +17,7 @@ try {
     });
   }
 } catch (error) {
-  console.warn('OpenAI client initialization failed:', error.message);
+  logger.warn('OpenAI client initialization failed', { error: error.message });
 }
 
 // USDA API Configuration

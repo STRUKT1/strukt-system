@@ -1,10 +1,11 @@
 /**
  * Meals Service
- * 
+ *
  * Handles meal logging operations in Supabase with optional dual-write to Airtable.
  */
 
 const { supabaseAdmin } = require('../../lib/supabaseServer');
+const logger = require('../../lib/logger');
 
 const TABLE = 'meals';
 
@@ -73,7 +74,11 @@ async function logMeal(userId, mealData) {
     .single();
 
   if (error) {
-    console.error('Error logging meal:', error.message);
+    logger.error('Error logging meal', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message,
+      operation: 'logMeal'
+    });
     throw error;
   }
 
@@ -81,9 +86,18 @@ async function logMeal(userId, mealData) {
   if (DUAL_WRITE) {
     try {
       await writeMealToAirtable(userId, sanitizedData);
-      console.log('✅ Meal dual-write to Airtable successful');
+      logger.info('Airtable sync completed', {
+        userIdMasked: logger.maskUserId(userId),
+        syncType: 'dual-write',
+        dataType: 'meal'
+      });
     } catch (airtableError) {
-      console.error('⚠️ Meal dual-write to Airtable failed (non-blocking):', airtableError.message);
+      logger.warn('Airtable sync failed (non-blocking)', {
+        userIdMasked: logger.maskUserId(userId),
+        syncType: 'dual-write',
+        dataType: 'meal',
+        error: airtableError.message
+      });
       // Don't throw - dual-write failures shouldn't break the primary operation
     }
   }
@@ -107,9 +121,11 @@ async function writeMealToAirtable(userId, mealData) {
   }
   if (mealData.notes) airtablePayload['Notes'] = mealData.notes;
 
-  console.log('📝 Meal Airtable dual-write payload:', { 
-    userId: userId.substring(0, 8) + '...', 
-    fields: Object.keys(airtablePayload) 
+  logger.debug('Preparing Airtable dual-write payload', {
+    userIdMasked: logger.maskUserId(userId),
+    syncType: 'dual-write',
+    dataType: 'meal',
+    fields: Object.keys(airtablePayload)
   });
   
   // Note: Actual Airtable write implementation would go here
@@ -130,7 +146,11 @@ async function getUserMeals(userId, limit = 20) {
     .limit(limit);
 
   if (error) {
-    console.error('Error fetching meals:', error);
+    logger.error('Error fetching meals', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message,
+      operation: 'getUserMeals'
+    });
     throw error;
   }
 

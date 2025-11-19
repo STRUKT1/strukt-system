@@ -1,10 +1,11 @@
 /**
  * Chat Interactions Service
- * 
+ *
  * Handles chat interaction logging in Supabase with optional dual-write to Airtable.
  */
 
 const { supabaseAdmin } = require('../../lib/supabaseServer');
+const logger = require('../../lib/logger');
 
 const TABLE = 'chat_interactions';
 
@@ -67,7 +68,11 @@ async function logChatInteraction(userId, chatData) {
     .single();
 
   if (error) {
-    console.error('Error logging chat interaction:', error.message);
+    logger.error('Error logging chat interaction', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message,
+      operation: 'logChatInteraction'
+    });
     throw error;
   }
 
@@ -75,9 +80,18 @@ async function logChatInteraction(userId, chatData) {
   if (DUAL_WRITE) {
     try {
       await writeChatToAirtable(userId, sanitizedData);
-      console.log('✅ Chat dual-write to Airtable successful');
+      logger.info('Airtable sync completed', {
+        userIdMasked: logger.maskUserId(userId),
+        syncType: 'dual-write',
+        dataType: 'chat'
+      });
     } catch (airtableError) {
-      console.error('⚠️ Chat dual-write to Airtable failed (non-blocking):', airtableError.message);
+      logger.warn('Airtable sync failed (non-blocking)', {
+        userIdMasked: logger.maskUserId(userId),
+        syncType: 'dual-write',
+        dataType: 'chat',
+        error: airtableError.message
+      });
       // Don't throw - dual-write failures shouldn't break the primary operation
     }
   }
@@ -96,9 +110,11 @@ async function writeChatToAirtable(userId, chatData) {
   if (chatData.context) airtablePayload['Context'] = JSON.stringify(chatData.context);
   if (chatData.timestamp) airtablePayload['Created'] = chatData.timestamp;
 
-  console.log('📝 Chat Airtable dual-write payload:', { 
-    userId: userId.substring(0, 8) + '...', 
-    fields: Object.keys(airtablePayload) 
+  logger.debug('Preparing Airtable dual-write payload', {
+    userIdMasked: logger.maskUserId(userId),
+    syncType: 'dual-write',
+    dataType: 'chat',
+    fields: Object.keys(airtablePayload)
   });
   
   // Note: Actual Airtable write implementation would go here

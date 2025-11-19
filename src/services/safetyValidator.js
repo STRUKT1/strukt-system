@@ -1,9 +1,11 @@
 /**
  * Safety Validator Service
- * 
+ *
  * Validates AI responses for unsafe health advice, medical recommendations,
  * or other potentially harmful content before returning to users.
  */
+
+const logger = require('../lib/logger');
 
 // Define safety rules as pattern-based checks
 const SAFETY_RULES = [
@@ -74,13 +76,15 @@ function validateResponse(response) {
   for (const rule of SAFETY_RULES) {
     if (rule.pattern.test(response)) {
       issues.push(rule.issue);
-      
+
       // Log the unsafe content with context
       const match = response.match(rule.pattern);
       if (match) {
         const excerpt = getExcerpt(response, match.index, 100);
-        console.warn(`⚠️ Safety issue detected: ${rule.issue}`);
-        console.warn(`   Excerpt: "${excerpt}"`);
+        logger.warn('Safety validation issue detected', {
+          issue: rule.issue,
+          excerpt: excerpt.substring(0, 100), // Limit excerpt length for logs
+        });
       }
     }
   }

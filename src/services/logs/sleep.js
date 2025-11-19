@@ -1,10 +1,11 @@
 /**
  * Sleep Logs Service
- * 
+ *
  * Handles sleep logging operations in Supabase with optional dual-write to Airtable.
  */
 
 const { supabaseAdmin } = require('../../lib/supabaseServer');
+const logger = require('../../lib/logger');
 
 const TABLE = 'sleep_logs';
 
@@ -62,7 +63,11 @@ async function logSleep(userId, sleepData) {
     .single();
 
   if (error) {
-    console.error('Error logging sleep:', error.message);
+    logger.error('Error logging sleep', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message,
+      operation: 'logSleep'
+    });
     throw error;
   }
 
@@ -70,9 +75,18 @@ async function logSleep(userId, sleepData) {
   if (DUAL_WRITE) {
     try {
       await writeSleepToAirtable(userId, sanitizedData);
-      console.log('✅ Sleep dual-write to Airtable successful');
+      logger.info('Airtable sync completed', {
+        userIdMasked: logger.maskUserId(userId),
+        syncType: 'dual-write',
+        dataType: 'sleep'
+      });
     } catch (airtableError) {
-      console.error('⚠️ Sleep dual-write to Airtable failed (non-blocking):', airtableError.message);
+      logger.warn('Airtable sync failed (non-blocking)', {
+        userIdMasked: logger.maskUserId(userId),
+        syncType: 'dual-write',
+        dataType: 'sleep',
+        error: airtableError.message
+      });
       // Don't throw - dual-write failures shouldn't break the primary operation
     }
   }
@@ -92,9 +106,11 @@ async function writeSleepToAirtable(userId, sleepData) {
   if (sleepData.wake_time) airtablePayload['Wake Time'] = sleepData.wake_time;
   if (sleepData.notes) airtablePayload['Notes'] = sleepData.notes;
 
-  console.log('📝 Sleep Airtable dual-write payload:', { 
-    userId: userId.substring(0, 8) + '...', 
-    fields: Object.keys(airtablePayload) 
+  logger.debug('Preparing Airtable dual-write payload', {
+    userIdMasked: logger.maskUserId(userId),
+    syncType: 'dual-write',
+    dataType: 'sleep',
+    fields: Object.keys(airtablePayload)
   });
   
   // Note: Actual Airtable write implementation would go here

@@ -1,10 +1,11 @@
 /**
  * Supplements Service
- * 
+ *
  * Handles supplement logging operations in Supabase with optional dual-write to Airtable.
  */
 
 const { supabaseAdmin } = require('../../lib/supabaseServer');
+const logger = require('../../lib/logger');
 
 const TABLE = 'supplements';
 
@@ -62,7 +63,12 @@ async function logSupplement(userId, supplementData) {
     .single();
 
   if (error) {
-    console.error('Error logging supplement:', error.message);
+    logger.error('Error logging supplement', {
+      operation: 'insert',
+      dataType: 'supplement',
+      userId: logger.maskUserId(userId),
+      error: error.message
+    });
     throw error;
   }
 
@@ -70,9 +76,20 @@ async function logSupplement(userId, supplementData) {
   if (DUAL_WRITE) {
     try {
       await writeSupplementToAirtable(userId, sanitizedData);
-      console.log('✅ Supplement dual-write to Airtable successful');
+      logger.info('Supplement dual-write to Airtable successful', {
+        operation: 'dual-write',
+        syncType: 'airtable',
+        dataType: 'supplement',
+        userId: logger.maskUserId(userId)
+      });
     } catch (airtableError) {
-      console.error('⚠️ Supplement dual-write to Airtable failed (non-blocking):', airtableError.message);
+      logger.warn('Supplement dual-write to Airtable failed (non-blocking)', {
+        operation: 'dual-write',
+        syncType: 'airtable',
+        dataType: 'supplement',
+        userId: logger.maskUserId(userId),
+        error: airtableError.message
+      });
       // Don't throw - dual-write failures shouldn't break the primary operation
     }
   }
@@ -85,17 +102,20 @@ async function logSupplement(userId, supplementData) {
  */
 async function writeSupplementToAirtable(userId, supplementData) {
   const airtablePayload = {};
-  
+
   if (supplementData.supplement_name) airtablePayload['SupplementName'] = supplementData.supplement_name;
   if (supplementData.dose) airtablePayload['Dose'] = supplementData.dose;
   if (supplementData.time) airtablePayload['Time'] = supplementData.time;
   if (supplementData.notes) airtablePayload['Notes'] = supplementData.notes;
 
-  console.log('📝 Supplement Airtable dual-write payload:', { 
-    userId: userId.substring(0, 8) + '...', 
-    fields: Object.keys(airtablePayload) 
+  logger.debug('Supplement Airtable dual-write payload prepared', {
+    operation: 'dual-write',
+    syncType: 'airtable',
+    dataType: 'supplement',
+    userId: logger.maskUserId(userId),
+    fields: Object.keys(airtablePayload)
   });
-  
+
   // Note: Actual Airtable write implementation would go here
 }
 
