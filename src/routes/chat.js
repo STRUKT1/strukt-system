@@ -7,14 +7,16 @@ const { authenticateJWT } = require('../lib/auth');
 const { validateChatMiddleware, validateChatQueryMiddleware } = require('../validation/chat');
 const { createChatInteraction, getChatHistory } = require('../services/chatService');
 const logger = require('../lib/logger');
+const { createChatLimiter } = require('../lib/rateLimit');
 
 const router = express.Router();
+const chatLimiter = createChatLimiter();
 
 /**
  * POST /v1/chat
  * Create a new chat interaction with magic logging
  */
-router.post('/v1/chat', authenticateJWT, validateChatMiddleware, async (req, res) => {
+router.post('/v1/chat', authenticateJWT, chatLimiter, validateChatMiddleware, async (req, res) => {
   try {
     logger.info('Chat interaction requested', {
       requestId: req.requestId,

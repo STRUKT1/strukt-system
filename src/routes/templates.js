@@ -9,6 +9,9 @@ const { authenticateJWT } = require('../lib/auth');
 const { supabaseAdmin } = require('../lib/supabaseServer');
 const { validateTemplate, validateTemplateUpdate } = require('../validation/templates');
 const logger = require('../lib/logger');
+const { createTemplateLimiter } = require('../lib/rateLimit');
+
+const templateLimiter = createTemplateLimiter();
 
 // GET /v1/templates - Get all templates for authenticated user
 router.get('/v1/templates', authenticateJWT, async (req, res) => {
@@ -121,7 +124,7 @@ router.get('/v1/templates/:type', authenticateJWT, async (req, res) => {
 });
 
 // POST /v1/templates - Create new template
-router.post('/v1/templates', authenticateJWT, async (req, res) => {
+router.post('/v1/templates', authenticateJWT, templateLimiter, async (req, res) => {
   try {
     const userId = req.userId;
     const { name, type, data } = req.body;
@@ -201,7 +204,7 @@ router.post('/v1/templates', authenticateJWT, async (req, res) => {
 });
 
 // PUT /v1/templates/:id - Update template
-router.put('/v1/templates/:id', authenticateJWT, async (req, res) => {
+router.put('/v1/templates/:id', authenticateJWT, templateLimiter, async (req, res) => {
   try {
     const userId = req.userId;
     const { id } = req.params;
@@ -303,7 +306,7 @@ router.put('/v1/templates/:id', authenticateJWT, async (req, res) => {
 });
 
 // DELETE /v1/templates/:id - Delete template
-router.delete('/v1/templates/:id', authenticateJWT, async (req, res) => {
+router.delete('/v1/templates/:id', authenticateJWT, templateLimiter, async (req, res) => {
   try {
     const userId = req.userId;
     const { id } = req.params;
@@ -366,7 +369,7 @@ router.delete('/v1/templates/:id', authenticateJWT, async (req, res) => {
 });
 
 // POST /v1/templates/:id/use - Use template (increment usage count)
-router.post('/v1/templates/:id/use', authenticateJWT, async (req, res) => {
+router.post('/v1/templates/:id/use', authenticateJWT, templateLimiter, async (req, res) => {
   try {
     const userId = req.userId;
     const { id } = req.params;
