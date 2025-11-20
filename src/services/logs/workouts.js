@@ -15,8 +15,37 @@ const DUAL_WRITE = process.env.DUAL_WRITE === 'true';
 
 // Valid fields for workouts table based on schema
 const VALID_WORKOUT_FIELDS = new Set([
-  'type', 'description', 'duration_minutes', 'distance_km', 'calories', 'notes', 'date'
+  'type', 'description', 'duration_minutes', 'distance_km', 'calories', 'notes', 'date',
+  'exercises', 'workout_type', 'perceived_exertion', 'workout_date'
 ]);
+
+/**
+ * Normalize exercise data to ensure consistent format
+ * @param {Array} exercises - Array of exercise objects
+ * @returns {Array} Normalized exercises
+ */
+function normalizeExercises(exercises) {
+  if (!Array.isArray(exercises)) {
+    return [];
+  }
+
+  return exercises.map(exercise => {
+    // Normalize 'name' vs 'exercise_name'
+    const name = exercise.name || exercise.exercise_name;
+
+    return {
+      name,
+      sets: exercise.sets,
+      reps: exercise.reps,
+      weight: exercise.weight,
+      weight_unit: exercise.weight_unit || 'lbs',
+      duration_seconds: exercise.duration_seconds,
+      distance: exercise.distance,
+      distance_unit: exercise.distance_unit,
+      notes: exercise.notes,
+    };
+  });
+}
 
 /**
  * Sanitize workout data by removing unknown fields and handling nulls
@@ -25,17 +54,22 @@ const VALID_WORKOUT_FIELDS = new Set([
  */
 function sanitizeWorkoutData(data) {
   const sanitized = {};
-  
+
   for (const [key, value] of Object.entries(data)) {
     if (VALID_WORKOUT_FIELDS.has(key)) {
       // Handle null/undefined values safely
       if (value !== null && value !== undefined) {
-        sanitized[key] = value;
+        // Special handling for exercises - normalize format
+        if (key === 'exercises') {
+          sanitized[key] = normalizeExercises(value);
+        } else {
+          sanitized[key] = value;
+        }
       }
     }
     // Silently ignore unknown fields for security
   }
-  
+
   return sanitized;
 }
 
@@ -155,8 +189,131 @@ async function getUserWorkouts(userId, limit = 20) {
   return data || [];
 }
 
+/**
+ * Get a specific workout by ID
+ * @param {string} userId - Auth user ID
+ * @param {string} workoutId - Workout ID
+ * @returns {Promise<Object|null>} Workout record or null if not found
+ */
+async function getWorkout(userId, workoutId) {
+  const { data, error } = await supabaseAdmin
+    .from(TABLE)
+    .select('*')
+    .eq('id', workoutId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // Not found
+      return null;
+    }
+    logger.error('Error fetching workout', {
+      userIdMasked: logger.maskUserId(userId),
+      workoutId,
+      error: error.message,
+      operation: 'getWorkout'
+    });
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Update a workout entry
+ * @param {string} userId - Auth user ID
+ * @param {string} workoutId - Workout ID
+ * @param {Object} updates - Updated workout data
+ * @returns {Promise<Object>} Updated workout record
+ */
+async function updateWorkout(userId, workoutId, updates) {
+  if (!userId || typeof userId !== 'string') {
+    throw new Error('Valid userId is required');
+  }
+
+  if (!workoutId || typeof workoutId !== 'string') {
+    throw new Error('Valid workoutId is required');
+  }
+
+  if (!updates || typeof updates !== 'object') {
+    throw new Error('Valid update data is required');
+  }
+
+  // Sanitize update data
+  const sanitizedUpdates = sanitizeWorkoutData(updates);
+
+  const { data, error } = await supabaseAdmin
+    .from(TABLE)
+    .update(sanitizedUpdates)
+    .eq('id', workoutId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+
+  if (error) {
+    logger.error('Error updating workout', {
+      userIdMasked: logger.maskUserId(userId),
+      workoutId,
+      error: error.message,
+      operation: 'updateWorkout'
+    });
+    throw error;
+  }
+
+  logger.info('Workout updated', {
+    userIdMasked: logger.maskUserId(userId),
+    workoutId,
+    operation: 'updateWorkout'
+  });
+
+  return data;
+}
+
+/**
+ * Delete a workout entry
+ * @param {string} userId - Auth user ID
+ * @param {string} workoutId - Workout ID
+ * @returns {Promise<void>}
+ */
+async function deleteWorkout(userId, workoutId) {
+  if (!userId || typeof userId !== 'string') {
+    throw new Error('Valid userId is required');
+  }
+
+  if (!workoutId || typeof workoutId !== 'string') {
+    throw new Error('Valid workoutId is required');
+  }
+
+  const { error } = await supabaseAdmin
+    .from(TABLE)
+    .delete()
+    .eq('id', workoutId)
+    .eq('user_id', userId);
+
+  if (error) {
+    logger.error('Error deleting workout', {
+      userIdMasked: logger.maskUserId(userId),
+      workoutId,
+      error: error.message,
+      operation: 'deleteWorkout'
+    });
+    throw error;
+  }
+
+  logger.info('Workout deleted', {
+    userIdMasked: logger.maskUserId(userId),
+    workoutId,
+    operation: 'deleteWorkout'
+  });
+}
+
 module.exports = {
   logWorkout,
   getUserWorkouts,
-  sanitizeWorkoutData // Export for testing
+  getWorkout,
+  updateWorkout,
+  deleteWorkout,
+  sanitizeWorkoutData, // Export for testing
+  normalizeExercises // Export for testing
 };
