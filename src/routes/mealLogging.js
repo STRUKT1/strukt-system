@@ -17,8 +17,18 @@ const router = express.Router();
 const voiceLimiter = createVoiceLogLimiter();
 
 /**
- * POST /v1/meals/voice-log
- * Log a meal from voice transcription
+ * Meal Logging Endpoints
+ *
+ * Two endpoints provide meal logging functionality:
+ * - POST /v1/meals/voice-log (original endpoint for voice-based meal logging)
+ * - POST /v1/logs/meal (new endpoint for consistency with /v1/logs/workout pattern)
+ *
+ * Both routes use the same handler and accept identical request formats.
+ */
+
+/**
+ * Shared meal logging handler
+ * Handles both /v1/meals/voice-log and /v1/logs/meal endpoints
  *
  * Request body:
  * {
@@ -41,7 +51,7 @@ const voiceLimiter = createVoiceLogLimiter();
  *   }
  * }
  */
-router.post('/v1/meals/voice-log', authenticateJWT, voiceLimiter, requireOpenAIConsent, async (req, res) => {
+async function handleMealLog(req, res) {
   try {
     const { transcription, timestamp } = req.body;
 
@@ -211,7 +221,19 @@ router.post('/v1/meals/voice-log', authenticateJWT, voiceLimiter, requireOpenAIC
       message: 'Failed to log meal. Please try again.',
     });
   }
-});
+}
+
+/**
+ * POST /v1/meals/voice-log
+ * Original voice-based meal logging endpoint
+ */
+router.post('/v1/meals/voice-log', authenticateJWT, voiceLimiter, requireOpenAIConsent, handleMealLog);
+
+/**
+ * POST /v1/logs/meal
+ * Alias endpoint for consistency with /v1/logs/* pattern
+ */
+router.post('/v1/logs/meal', authenticateJWT, voiceLimiter, requireOpenAIConsent, handleMealLog);
 
 /**
  * GET /v1/meals
