@@ -10,4 +10,10 @@ module.exports = {
     ALLOWED_FORMATS: ['jpeg', 'jpg', 'png', 'webp'],
     ALLOWED_MIME_TYPES: ['image/jpeg', 'image/png', 'image/webp'],
   },
+
+  SERVER: {
+    REQUEST_TIMEOUT: 30000,        // 30 seconds
+    KEEP_ALIVE_TIMEOUT: 35000,     // 35 seconds (higher than request timeout)
+    HEADERS_TIMEOUT: 36000,        // 36 seconds (higher than keep-alive)
+  },
 };

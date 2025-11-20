@@ -11,6 +11,7 @@ const { standardRateLimit } = require('./lib/rateLimit');
 const logger = require('./lib/logger');
 const dashboardAuditService = require('./services/dashboardAuditService');
 const dashboardMetricsService = require('./services/dashboardMetricsService');
+const { SERVER } = require('./config/constants');
 
 // Validate configuration
 const { errors, warnings } = validateConfig();
@@ -80,6 +81,29 @@ app.use(cors({
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Handle request timeouts gracefully
+app.use((req, res, next) => {
+  // Set timeout for this specific request
+  req.setTimeout(SERVER.REQUEST_TIMEOUT, () => {
+    logger.warn('Request timeout', {
+      method: req.method,
+      path: req.path,
+      requestId: req.requestId,
+      ip: req.ip,
+    });
+
+    if (!res.headersSent) {
+      res.status(408).json({
+        ok: false,
+        code: 'ERR_REQUEST_TIMEOUT',
+        message: 'Request timeout - operation took too long to complete',
+      });
+    }
+  });
+
+  next();
+});
 
 // Rate limiting
 app.use(standardRateLimit);
@@ -172,6 +196,21 @@ const server = app.listen(config.port, () => {
     supabaseConfigured: !!config.supabase.url,
     dualWriteEnabled: config.dualWrite,
   });
+});
+
+// Set request timeout to 30 seconds
+server.timeout = SERVER.REQUEST_TIMEOUT;
+
+// Set keep-alive timeout (should be higher than timeout)
+server.keepAliveTimeout = SERVER.KEEP_ALIVE_TIMEOUT;
+
+// Set headers timeout (should be higher than keepAliveTimeout)
+server.headersTimeout = SERVER.HEADERS_TIMEOUT;
+
+logger.info('Server timeout configuration applied', {
+  requestTimeout: '30s',
+  keepAliveTimeout: '35s',
+  headersTimeout: '36s',
 });
 
 // Graceful shutdown
