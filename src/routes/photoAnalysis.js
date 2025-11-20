@@ -9,11 +9,88 @@ const { requireOpenAIConsent } = require('../lib/gdprConsent');
 const { createPhotoAnalysisLimiter } = require('../lib/rateLimit');
 const { analyzeWorkoutPhoto, analyzeMealPhoto } = require('../services/photoAnalysisService');
 const logger = require('../lib/logger');
+const { PHOTO_UPLOAD } = require('../config/constants');
 
 const router = express.Router();
 
 // Rate limiter: 20 photo analyses per hour per user
 const photoAnalysisLimiter = createPhotoAnalysisLimiter();
+
+/**
+ * Validate photo upload size and format
+ * Middleware to prevent cost explosion from oversized/invalid images
+ */
+const validatePhotoUpload = (req, res, next) => {
+  const { photo } = req.body;
+
+  // If no photo data, skip validation (will be caught by endpoint validation)
+  if (!photo) {
+    return res.status(400).json({
+      ok: false,
+      code: 'ERR_NO_IMAGE',
+      message: 'No photo data provided'
+    });
+  }
+
+  // Validate base64 image
+  try {
+    // Extract format from data URI
+    const matches = photo.match(/^data:image\/(jpeg|jpg|png|webp);base64,/);
+
+    if (!matches) {
+      return res.status(400).json({
+        ok: false,
+        code: 'ERR_INVALID_FORMAT',
+        message: 'Invalid image format. Accepted formats: JPEG, PNG, WebP'
+      });
+    }
+
+    const format = matches[1];
+
+    // Check format is allowed
+    if (!PHOTO_UPLOAD.ALLOWED_FORMATS.includes(format.toLowerCase())) {
+      return res.status(400).json({
+        ok: false,
+        code: 'ERR_INVALID_FORMAT',
+        message: `Invalid image format: ${format}. Accepted formats: JPEG, PNG, WebP`
+      });
+    }
+
+    // Calculate size
+    const base64Data = photo.split(',')[1];
+    const sizeInBytes = Buffer.byteLength(base64Data, 'base64');
+    const sizeInMB = sizeInBytes / (1024 * 1024);
+
+    if (sizeInMB > PHOTO_UPLOAD.MAX_SIZE_MB) {
+      return res.status(400).json({
+        ok: false,
+        code: 'ERR_FILE_TOO_LARGE',
+        message: `Image exceeds maximum size of ${PHOTO_UPLOAD.MAX_SIZE_MB}MB (current: ${sizeInMB.toFixed(2)}MB)`
+      });
+    }
+
+    // Log size for monitoring
+    logger.info('Photo upload validated', {
+      format,
+      sizeInMB: sizeInMB.toFixed(2),
+      operation: 'photo-validation'
+    });
+
+  } catch (error) {
+    logger.error('Photo validation error', {
+      error: error.message,
+      operation: 'photo-validation'
+    });
+
+    return res.status(400).json({
+      ok: false,
+      code: 'ERR_VALIDATION_FAILED',
+      message: 'Failed to validate image data'
+    });
+  }
+
+  next();
+};
 
 /**
  * POST /v1/photos/analyze-workout
@@ -48,7 +125,7 @@ const photoAnalysisLimiter = createPhotoAnalysisLimiter();
  *   }
  * }
  */
-router.post('/v1/photos/analyze-workout', authenticateJWT, photoAnalysisLimiter, requireOpenAIConsent, async (req, res) => {
+router.post('/v1/photos/analyze-workout', authenticateJWT, photoAnalysisLimiter, requireOpenAIConsent, validatePhotoUpload, async (req, res) => {
   try {
     const { photo, hint } = req.body;
 
@@ -178,7 +255,7 @@ router.post('/v1/photos/analyze-workout', authenticateJWT, photoAnalysisLimiter,
  *   }
  * }
  */
-router.post('/v1/photos/analyze-meal', authenticateJWT, photoAnalysisLimiter, requireOpenAIConsent, async (req, res) => {
+router.post('/v1/photos/analyze-meal', authenticateJWT, photoAnalysisLimiter, requireOpenAIConsent, validatePhotoUpload, async (req, res) => {
   try {
     const { photo, mealType } = req.body;
 
