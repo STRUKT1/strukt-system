@@ -6,6 +6,8 @@ const express = require('express');
 const { authenticateJWT } = require('../lib/auth');
 const { validateProfileMiddleware } = require('../validation/profile');
 const { getProfile, upsertProfile } = require('../services/profileService');
+const { exportUserData } = require('../services/dataExportService');
+const { createUserRateLimit } = require('../lib/rateLimit');
 const logger = require('../lib/logger');
 
 const router = express.Router();
@@ -73,6 +75,55 @@ router.patch('/v1/profile', authenticateJWT, validateProfileMiddleware, async (r
       ok: false,
       code: 'ERR_PROFILE_UPDATE_FAILED',
       message: 'Failed to update profile',
+    });
+  }
+});
+
+// SAR requests limited to 5 per hour per user
+const sarLimiter = createUserRateLimit(60 * 60 * 1000, 5, 'Too many data export requests. Please try again later.');
+
+/**
+ * GET /v1/profile/export
+ * Subject Access Request (SAR) - GDPR Article 15
+ * Returns ALL user data in JSON format
+ */
+router.get('/v1/profile/export', authenticateJWT, sarLimiter, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    logger.info('SAR endpoint accessed', {
+      requestId: req.requestId,
+      userIdMasked: logger.maskUserId(userId),
+      ip: req.ip,
+      operation: 'sar-request',
+    });
+
+    // Export all user data
+    const exportData = await exportUserData(userId);
+
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="strukt-data-export-${Date.now()}.json"`);
+
+    // Return the export
+    res.status(200).json({
+      ok: true,
+      message: 'Data export successful',
+      export: exportData,
+    });
+
+  } catch (error) {
+    logger.error('SAR endpoint error', {
+      requestId: req.requestId,
+      userIdMasked: req.userId ? logger.maskUserId(req.userId) : undefined,
+      error: error.message,
+      operation: 'sar-request',
+    });
+
+    res.status(500).json({
+      ok: false,
+      code: 'ERR_EXPORT_FAILED',
+      message: 'Failed to export data. Please try again later.',
     });
   }
 });
