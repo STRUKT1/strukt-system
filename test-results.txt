@@ -1,0 +1,533 @@
+
+> strukt-system@1.0.0 test
+> node test/airtable-schema.test.js && node test/nutrition.summary.test.js && node test/profile.targets.test.js && node test/llm-pipeline.test.js && node src/tests/safetyValidator.test.js && node src/tests/openaiService.test.js && node src/tests/ask.test.js && node __tests__/toneFilterService.test.js && node __tests__/planGeneration.test.js
+
+🚀 Running Airtable Schema Tests
+
+🧪 Testing Schema Specification...
+✅ Schema spec file exists
+✅ Schema spec file is readable and has expected structure
+🎉 All schema spec tests passed!
+🧪 Testing Schema Version Format...
+✅ Schema version format is correct
+✅ Backward compatibility maintained
+🎉 All schema version format tests passed!
+🧪 Testing Airtable Schema Adapter...
+✅ Version info loaded correctly
+✅ Table ID resolution works
+✅ Field ID resolution works
+✅ Legacy table IDs compatibility works
+✅ Legacy field IDs compatibility works
+✅ Shadow write flag accessible
+✅ Error handling for invalid table works
+🎉 All adapter tests passed!
+🧪 Testing Shadow Write Utilities...
+✅ Shadow writes function works
+✅ Incoming record mapping works
+✅ Shadow write flag is accessible
+🎉 All shadow write tests passed!
+
+📊 Test Results: 4/4 test suites passed
+🎉 All tests passed successfully!
+🚀 Running Nutrition Summary Tests
+
+🧪 Testing Nutrition Summary Validation...
+✅ Valid query parameters pass validation
+✅ Default values work correctly
+✅ 7d range and custom timezone work
+✅ Invalid range is rejected
+✅ Unknown fields are rejected
+🎉 All nutrition summary validation tests passed!
+
+🧪 Testing Nutrition Service...
+✅ nutrition_targets extraction works
+✅ Fallback to daily_kcal_target + macro_targets works
+✅ Empty profile returns null
+✅ Null profile returns null
+🎉 All nutrition service tests passed!
+
+🧪 Testing Profile Targets Validation...
+✅ Valid nutrition targets pass validation
+✅ Invalid daily kcal target is rejected
+✅ Invalid macro values are rejected
+✅ Unknown fields in macro_targets are rejected
+🎉 All profile targets validation tests passed!
+
+🧪 Testing Meal Validation with Fiber...
+✅ Valid meal with fiber passes validation
+✅ Meal without fiber passes validation
+🎉 All meal validation with fiber tests passed!
+
+📊 Nutrition Test Results: 4/4 test suites passed
+🎉 All nutrition tests passed successfully!
+🚀 Running Profile Targets Tests
+
+🧪 Testing Profile Targets Validation...
+✅ Complete nutrition targets pass validation
+✅ Minimal targets pass validation
+✅ Invalid kcal target (too low) is rejected
+✅ Invalid kcal target (too high) is rejected
+✅ Negative macro values are rejected
+✅ Unreasonably high macro values are rejected
+✅ Unknown fields in macro_targets are rejected
+✅ Invalid activity factor is rejected
+🎉 All profile targets validation tests passed!
+
+🧪 Testing Profile Targets Service...
+✅ Nutrition target fields are preserved and unknown fields removed
+✅ Null values are properly filtered out at top level
+🎉 All profile targets service tests passed!
+
+🧪 Testing Profile Update Payload...
+✅ PATCH payload with targets passes validation
+✅ Partial macro targets update passes validation
+✅ Full nutrition targets update passes validation
+🎉 All profile update payload tests passed!
+
+📊 Profile Targets Test Results: 3/3 test suites passed
+🎉 All profile targets tests passed successfully!
+🚀 Running LLM Pipeline Tests
+
+🧪 Testing System Prompt Module...
+✅ Base system prompt loaded correctly
+✅ Empty context handling works
+✅ Memory context building works
+✅ Profile context building works
+🧪 Testing System Prompt Injection...
+✅ System prompt injection includes all context
+✅ First message is properly formatted system prompt
+🧪 Testing Memory Stitching...
+✅ Empty memory handling works
+✅ Single conversation memory works
+✅ Multiple conversation memory works
+✅ Memory integration in full prompt works
+🧪 Testing Profile Context...
+✅ Empty profile handling works
+✅ Airtable-style profile context works
+✅ Supabase-style profile context works
+✅ Partial profile handling works
+🎉 All LLM Pipeline tests passed!
+
+🚀 Running Safety Validator Tests
+
+✅ Safe response passes validation
+{"timestamp":"2025-11-20T12:22:08.943Z","level":"warn","message":"Safety validation issue detected","issue":"Recommending to skip meals","excerpt":"You should skip breakfast to lose weight faster."}
+✅ Detect meal skipping advice
+{"timestamp":"2025-11-20T12:22:08.945Z","level":"warn","message":"Safety validation issue detected","issue":"Advising to stop prescribed medication","excerpt":"You should stop taking your medication and try natural remedies instead."}
+✅ Detect medication advice
+{"timestamp":"2025-11-20T12:22:08.945Z","level":"warn","message":"Safety validation issue detected","issue":"Attempting to diagnose medical condition","excerpt":"Based on your symptoms, you might have diabetes. Here's what to do..."}
+✅ Detect diagnosis attempts
+{"timestamp":"2025-11-20T12:22:08.945Z","level":"warn","message":"Safety validation issue detected","issue":"Discouraging medical consultation","excerpt":"There's no need to see a doctor about that, just do these exercises."}
+✅ Detect discouraging medical consultation
+{"timestamp":"2025-11-20T12:22:08.945Z","level":"warn","message":"Safety validation issue detected","issue":"Encouraging exercising through pain or injury","excerpt":"Just push through the pain, it will get better with time."}
+✅ Detect push through pain advice
+{"timestamp":"2025-11-20T12:22:08.946Z","level":"warn","message":"Safety validation issue detected","issue":"Promoting rapid/extreme weight loss","excerpt":"You can lose 20 pounds in 2 weeks with this diet!"}
+✅ Detect extreme weight loss claims
+{"timestamp":"2025-11-20T12:22:08.946Z","level":"warn","message":"Safety validation issue detected","issue":"Suggesting very low calorie intake","excerpt":"Just eat 800 calories per day and you'll see results."}
+✅ Detect very low calorie suggestions
+✅ Handle null/undefined input gracefully
+✅ Detect borderline content (good advice to see doctor)
+✅ No false positives on safe content
+✅ SAFETY_RULES has correct structure
+
+==================================================
+📊 Test Results: 12/12 tests passed
+🎉 All safety validator tests passed!
+🚀 Running OpenAI Service Tests
+
+✅ getFallbackResponse returns default message
+✅ getFallbackResponse handles timeout type
+✅ getFallbackResponse handles error type
+✅ getFallbackResponse handles unsafe type
+✅ getFallbackResponse handles unknown type gracefully
+✅ All fallback messages are user-friendly
+
+==================================================
+📊 Test Results: 6/6 tests passed
+🎉 All OpenAI service tests passed!
+🚀 Running Ask Controller Tests
+
+✅ Controller module exports askController
+✅ Validation rejects empty messages array
+✅ Validation accepts valid messages
+✅ Validation enforces 1000 character limit
+✅ Validation requires valid role
+✅ Validation accepts optional userId as UUID
+✅ Validation rejects invalid UUID format
+
+==================================================
+📊 Test Results: 7/7 tests passed
+🎉 All ask controller tests passed!
+🚀 Running Tone Filter Service Tests
+
+✅ Safe supportive response passes all checks
+✅ Encouraging response with positive tone passes
+{"timestamp":"2025-11-20T12:22:09.805Z","level":"warn","message":"Tone safety issue detected","issue":"Judgmental language: using failure-oriented language","severity":"medium","excerpt":"You failed to complete your workout plan this week."}
+✅ Detects "you failed" as judgmental
+{"timestamp":"2025-11-20T12:22:09.806Z","level":"warn","message":"Tone safety issue detected","issue":"Judgmental tone: accusatory questioning","severity":"medium","excerpt":"Why didn't you complete your meals yesterday?"}
+✅ Detects "why didn't you" as accusatory
+{"timestamp":"2025-11-20T12:22:09.807Z","level":"warn","message":"Tone safety issue detected","issue":"Judgmental tone: past regret inducing","severity":"low","excerpt":"You should have done your workout this morning."}
+✅ Detects "should have" as regret-inducing
+{"timestamp":"2025-11-20T12:22:09.807Z","level":"warn","message":"Tone safety issue detected","issue":"Harmful language: using derogatory terms","severity":"high","excerpt":"You're being lazy about your fitness goals."}
+✅ Detects derogatory terms (lazy, weak)
+{"timestamp":"2025-11-20T12:22:09.807Z","level":"warn","message":"Tone safety issue detected","issue":"Sarcastic or dismissive tone","severity":"medium","excerpt":"Yeah right, I'm sure you'll stick to your plan this time."}
+✅ Detects sarcastic tone ("yeah right")
+{"timestamp":"2025-11-20T12:22:09.808Z","level":"warn","message":"Tone safety issue detected","issue":"Passive-aggressive tone","severity":"medium","excerpt":"Good luck with that workout plan of yours."}
+✅ Detects passive-aggressive tone ("good luck with that")
+{"timestamp":"2025-11-20T12:22:09.808Z","level":"warn","message":"Tone safety issue detected","issue":"Harmful advice: recommending meal skipping","severity":"high","excerpt":"Try to skip meals to accelerate your weight loss."}
+✅ Detects meal skipping advice
+{"timestamp":"2025-11-20T12:22:09.808Z","level":"warn","message":"Tone safety issue detected","issue":"Harmful advice: restrictive eating","severity":"high","excerpt":"Just don't eat after 6pm and you'll lose weight."}
+✅ Detects "don't eat" restrictive advice
+{"timestamp":"2025-11-20T12:22:09.808Z","level":"warn","message":"Tone safety issue detected","issue":"Harmful advice: promoting starvation","severity":"high","excerpt":"Starve yourself for a day to reset your metabolism."}
+✅ Detects starvation language
+{"timestamp":"2025-11-20T12:22:09.808Z","level":"warn","message":"Tone safety issue detected","issue":"Harmful advice: encouraging ignoring pain","severity":"high","excerpt":"Just push through the pain during your workout."}
+✅ Detects "push through pain" advice
+{"timestamp":"2025-11-20T12:22:09.808Z","level":"warn","message":"Tone safety issue detected","issue":"Harmful advice: promoting pain tolerance","severity":"medium","excerpt":"Remember, no pain, no gain! Push harder."}
+✅ Detects "no pain no gain" mentality
+{"timestamp":"2025-11-20T12:22:09.808Z","level":"warn","message":"Tone safety issue detected","issue":"Prescriptive tone: using commanding language","severity":"low","excerpt":"You must do 100 push-ups every day."}
+✅ Detects prescriptive "must do" commands
+{"timestamp":"2025-11-20T12:22:09.808Z","level":"warn","message":"Tone safety issue detected","issue":"Prescriptive tone: commanding future actions","severity":"medium","excerpt":"You will eat exactly 1500 calories per day."}
+✅ Detects "you will" commanding tone
+{"timestamp":"2025-11-20T12:22:09.808Z","level":"warn","message":"Tone safety issue detected","issue":"Body-negative language: using weight-based labels","severity":"high","excerpt":"You're overweight and need to change that."}
+✅ Detects body-negative weight labels
+{"timestamp":"2025-11-20T12:22:09.809Z","level":"warn","message":"Tone safety issue detected","issue":"Harmful advice: promoting rapid weight loss","severity":"high","excerpt":"You can lose weight fast with this approach."}
+✅ Detects rapid weight loss promotion
+{"timestamp":"2025-11-20T12:22:09.809Z","level":"warn","message":"Tone safety issue detected","issue":"Moral framing: assigning morality to food choices","severity":"medium","excerpt":"That cheat meal was being bad - you need to be good tomorrow."}
+✅ Detects moral food framing ("cheat meal", "being bad")
+{"timestamp":"2025-11-20T12:22:09.809Z","level":"warn","message":"Tone safety issue detected","issue":"Non-inclusive language: binary gender assumptions","severity":"low","excerpt":"Tell him/her to complete their workout."}
+✅ Detects binary gender assumptions (he/she)
+{"timestamp":"2025-11-20T12:22:09.809Z","level":"warn","message":"Tone safety issue detected","issue":"Non-inclusive language: gendered casual terms","severity":"low","excerpt":"Hey guys, let's crush this workout!"}
+✅ Detects gendered casual terms (guys, dude)
+{"timestamp":"2025-11-20T12:22:09.809Z","level":"warn","message":"Tone safety issue detected","issue":"Emotionally insensitive: dismissing mental health concerns","severity":"high","excerpt":"Just get over it and stop worrying about your anxiety."}
+✅ Detects dismissive mental health responses
+{"timestamp":"2025-11-20T12:22:09.809Z","level":"warn","message":"Tone safety issue detected","issue":"Emotionally insensitive: invalidating feelings","severity":"high","excerpt":"Your stress is all in your head, just relax."}
+✅ Detects invalidating feelings ("it's in your head")
+{"timestamp":"2025-11-20T12:22:09.810Z","level":"warn","message":"Tone safety issue detected","issue":"Emotionally insensitive: commanding emotional change","severity":"high","excerpt":"Stop being sad and just focus on your goals."}
+✅ Detects commanding emotional change
+{"timestamp":"2025-11-20T12:22:09.810Z","level":"warn","message":"Tone safety issue detected","issue":"Ableist language detected","severity":"high","excerpt":"That's a crazy idea for your workout plan."}
+✅ Detects ableist terms (crazy, insane)
+✅ Sentiment analysis detects positive tone
+✅ Sentiment analysis detects negative tone
+✅ Sentiment analysis handles neutral tone
+✅ Handles null input gracefully
+✅ Handles undefined input gracefully
+✅ Handles empty string input
+{"timestamp":"2025-11-20T12:22:09.811Z","level":"warn","message":"Tone safety issue detected","issue":"Judgmental language: using failure-oriented language","severity":"medium","excerpt":"You failed again. Why didn't you try harder? You're lazy and this is pathetic."}
+{"timestamp":"2025-11-20T12:22:09.811Z","level":"warn","message":"Tone safety issue detected","issue":"Judgmental tone: accusatory questioning","severity":"medium","excerpt":"You failed again. Why didn't you try harder? You're lazy and this is pathetic."}
+{"timestamp":"2025-11-20T12:22:09.811Z","level":"warn","message":"Tone safety issue detected","issue":"Harmful language: using derogatory terms","severity":"high","excerpt":"...u failed again. Why didn't you try harder? You're lazy and this is pathetic."}
+✅ Detects multiple tone issues in single response
+✅ TONE_SAFETY_RULES has correct structure
+✅ validateTone returns proper structure
+
+==================================================
+📊 Test Results: 33/33 tests passed
+🎉 All tone filter service tests passed!
+🧪 Running Plan Generation Tests...
+
+📋 Testing Plan Structure Validation...
+✅ validatePlanStructure accepts valid plan
+✅ validatePlanStructure rejects null plan
+✅ validatePlanStructure detects missing training section
+✅ validatePlanStructure detects missing nutrition section
+✅ validatePlanStructure detects empty sections
+✅ validatePlanStructure accepts string sections
+✅ validatePlanStructure rejects empty string sections
+
+🔄 Testing Fallback Plan Generation...
+✅ generateFallbackPlan creates valid structure with minimal profile
+✅ generateFallbackPlan uses profile data when available
+✅ generateFallbackPlan handles null profile fields safely
+✅ generateFallbackPlan includes all required workout days
+✅ generateFallbackPlan includes nutrition guidelines
+✅ generateFallbackPlan includes recovery strategies
+
+🛡️ Testing Null Field Handling...
+{"timestamp":"2025-11-20T12:22:10.227Z","level":"warn","message":"Failed to build full wellness context","error":"SUPABASE_URL environment variable is required","operation":"build-wellness-context"}
+✅ buildWellnessContext handles missing user data gracefully
+{"timestamp":"2025-11-20T12:22:10.228Z","level":"warn","message":"Failed to build full wellness context","error":"SUPABASE_URL environment variable is required","operation":"build-wellness-context"}
+✅ buildWellnessContext returns valid structure
+
+💉 Testing Wellness Context Injection...
+✅ regenerateFromProfile includes wellness context
+✅ regenerateFromProfileWithWellness exists and is a function
+
+💾 Testing Save Confirmation...
+✅ Plan save returns metadata with version
+
+🔍 Testing Dev Preview Mode...
+✅ Preview mode flag is recognized
+
+==================================================
+📊 Test Results Summary
+==================================================
+✅ Passed: 19
+❌ Failed: 0
+
+🎉 All plan generation tests passed!
+
+
+> strukt-system@1.0.0 test:ai-coach-memory
+> node src/tests/weeklyDigest.test.js && node src/tests/vectorSearch.test.js && node src/tests/proactiveTrigger.test.js
+
+🚀 Running Weekly Digest Tests
+
+✅ generateWeeklyDigest function exists
+✅ Weekly digest uses gpt-4o-mini or gpt-4-turbo
+✅ Weekly digest stores with type "weekly_summary"
+✅ Weekly digest queries last 7 days of logs
+✅ ai_coach_notes table migration exists
+✅ ai_coach_notes has proper RLS policies
+✅ Weekly digest groups logs by user
+✅ Prompt service has fetchWeeklySummaries function
+
+==================================================
+📊 Test Results: 8/8 tests passed
+🎉 All weekly digest tests passed!
+🚀 Running Vector Search Tests
+
+✅ Embedding service module exports required functions
+✅ Embedding service uses text-embedding-3-small
+✅ log_embeddings table migration exists
+✅ log_embeddings has HNSW vector index
+✅ log_embeddings has proper RLS policies
+✅ Vector search RPC function migration exists
+✅ Vector search RPC filters by user_id
+✅ Vector search has date threshold parameter
+✅ searchSimilarLogs accepts userId parameter
+✅ searchSimilarLogs defaults to 90 days back
+✅ Prompt service integrates vector search
+✅ storeLogEmbedding stores all required fields
+
+==================================================
+📊 Test Results: 12/12 tests passed
+🎉 All vector search tests passed!
+🚀 Running Proactive Trigger Tests
+
+✅ checkUserStatus function exists
+✅ checkUserStatus queries last 3 days of logs
+✅ Stress detection includes stress keywords
+✅ Stress trigger requires 2 or more stressful days
+✅ coach_notifications table migration exists
+✅ coach_notifications has proper RLS policies
+✅ Notifications use type ai_coach_proactive
+✅ checkUserStatus prevents duplicate recent notifications
+✅ Proactive message is supportive and helpful
+✅ checkUserStatus groups logs by user
+✅ coach_notifications table has read field
+✅ Users can mark notifications as read
+
+==================================================
+📊 Test Results: 12/12 tests passed
+🎉 All proactive trigger tests passed!
+
+> strukt-system@1.0.0 test:dashboard-audit
+> node __tests__/dashboardAudit.test.js
+
+🧪 Running Dashboard Audit Tests...
+
+📋 Testing Audit Service Structure...
+
+📝 Testing Audit Log Creation...
+
+🔒 Testing PII Sanitization...
+
+📊 Testing Metrics Service...
+{"timestamp":"2025-11-20T12:22:31.726Z","level":"info","message":"Metrics reset"}
+{"timestamp":"2025-11-20T12:22:31.726Z","level":"info","message":"Metrics reset"}
+{"timestamp":"2025-11-20T12:22:31.727Z","level":"info","message":"Metrics reset"}
+{"timestamp":"2025-11-20T12:22:31.727Z","level":"info","message":"Metrics reset"}
+
+🔗 Testing Correlation ID Middleware...
+
+🔄 Testing Integration Scenarios...
+✅ dashboardAuditService exports required functions
+✅ dashboardAuditService exports required constants
+✅ sanitizeErrorMessage removes tokens
+✅ sanitizeErrorMessage removes passwords
+✅ sanitizeDataSummary removes sensitive fields
+✅ sanitizeMetadata removes authorization headers
+✅ metricsService exports required functions
+✅ recordQuery captures query metrics
+✅ recordQuery tracks errors
+✅ recordCacheHit and recordCacheMiss track cache operations
+✅ getMetrics returns valid structure
+✅ getPrometheusMetrics returns Prometheus format
+✅ getMetricsByOperation groups by operation
+✅ correlationMiddleware adds correlationId to request
+✅ correlationMiddleware generates correlationId if missing
+✅ createAuditLog requires correlationId
+✅ createAuditLog requires eventType
+✅ createAuditLog requires operation
+{"timestamp":"2025-11-20T12:22:31.731Z","level":"info","message":"Dashboard audit: fetch_user_data","correlationId":"test-correlation-123","eventType":"data_fetch","status":"success","durationMs":150}
+✅ createAuditLog creates valid log entry
+{"timestamp":"2025-11-20T12:22:31.732Z","level":"info","message":"Dashboard audit: integration_fetch","correlationId":"integration-test-1763641351728","eventType":"data_fetch","status":"success","durationMs":125}
+✅ complete audit workflow with all components
+{"timestamp":"2025-11-20T12:22:31.732Z","level":"info","message":"Dashboard audit: fetch_dashboard_data","correlationId":"fetch-test-456","eventType":"data_fetch","status":"success","durationMs":200}
+✅ logDataFetch creates audit entry
+{"timestamp":"2025-11-20T12:22:31.732Z","level":"error","message":"Dashboard audit: failed_operation","correlationId":"error-test-789","eventType":"error_response","status":"error","durationMs":null}
+✅ logErrorResponse creates audit entry with error status
+{"timestamp":"2025-11-20T12:22:31.732Z","level":"error","message":"Dashboard audit: error_operation","correlationId":"error-workflow-1763641351728","eventType":"error_response","status":"error","durationMs":50}
+✅ error handling workflow
+
+==================================================
+📊 Test Results
+
+✅ Passed: 23
+❌ Failed: 0
+
+==================================================
+
+🎉 All dashboard audit tests passed!
+   Coverage: 100%
+
+> strukt-system@1.0.0 test:cron-functions
+> node __tests__/cronFunctions.test.js
+
+🧪 Running CRON Functions Tests...
+
+📋 Testing Edge Function Structure...
+✅ generateWeeklyDigest file exists
+✅ checkUserStatus file exists
+✅ generateWeeklyDigest contains retry logic
+✅ checkUserStatus contains retry logic
+✅ generateWeeklyDigest logs to system_cron_logs
+✅ checkUserStatus logs to system_cron_logs
+
+📋 Testing Migration Files...
+✅ system_cron_logs migration exists
+✅ system_cron_logs migration has correct structure
+✅ coach_notifications update migration exists
+✅ coach_notifications migration adds required fields
+
+📋 Testing Configuration...
+✅ config.toml exists
+✅ config.toml mentions CRON schedules
+
+📋 Testing Retry Logic Pattern...
+✅ generateWeeklyDigest has correct retry delays
+✅ checkUserStatus has correct retry delays
+
+📋 Testing Error Handling...
+✅ generateWeeklyDigest handles errors gracefully
+✅ checkUserStatus handles errors gracefully
+
+==================================================
+📊 Test Results: 16/16 passed
+🎉 All tests passed successfully!
+🚀 Running Tone Filter Integration Tests
+
+✅ Tone filter service exports validateTone function
+✅ Safe response passes through tone filter
+{"timestamp":"2025-11-20T12:22:47.383Z","level":"warn","message":"Tone safety issue detected","issue":"Harmful language: using derogatory terms","severity":"high","excerpt":"You're lazy and this is pathetic. Just get over it."}
+{"timestamp":"2025-11-20T12:22:47.385Z","level":"warn","message":"Tone safety issue detected","issue":"Emotionally insensitive: dismissing mental health concerns","severity":"high","excerpt":"You're lazy and this is pathetic. Just get over it."}
+✅ High severity tone issues trigger fallback (as in controller)
+{"timestamp":"2025-11-20T12:22:47.385Z","level":"warn","message":"Tone safety issue detected","issue":"Judgmental tone: accusatory questioning","severity":"medium","excerpt":"You should have done better. Why didn't you try harder?"}
+{"timestamp":"2025-11-20T12:22:47.385Z","level":"warn","message":"Tone safety issue detected","issue":"Judgmental tone: past regret inducing","severity":"low","excerpt":"You should have done better. Why didn't you try harder?"}
+✅ Multiple medium severity issues detected
+{"timestamp":"2025-11-20T12:22:47.386Z","level":"warn","message":"Tone safety issue detected","issue":"Prescriptive tone: using commanding language","severity":"low","excerpt":"You need to workout today."}
+     → Safe: false, Severity: low
+✅ Low severity issues do not trigger fallback
+✅ Sentiment analysis provides additional context
+✅ Handles edge cases gracefully in integration
+✅ Returns correct structure for logging to database
+{"timestamp":"2025-11-20T12:22:47.386Z","level":"warn","message":"Tone safety issue detected","issue":"Judgmental language: using failure-oriented language","severity":"medium","excerpt":"You failed to meet your goals this week. Why didn't you push yourself harder? \n    You're being lazy"}
+{"timestamp":"2025-11-20T12:22:47.386Z","level":"warn","message":"Tone safety issue detected","issue":"Judgmental tone: accusatory questioning","severity":"medium","excerpt":"You failed to meet your goals this week. Why didn't you push yourself harder? \n    You're being lazy"}
+{"timestamp":"2025-11-20T12:22:47.386Z","level":"warn","message":"Tone safety issue detected","issue":"Harmful language: using derogatory terms","severity":"high","excerpt":"...idn't you push yourself harder? \n    You're being lazy about your fitness. Just skip breakfast an"}
+✅ Detects real-world unsafe coaching response
+✅ Allows safe, encouraging coaching response
+
+==================================================
+📊 Integration Test Results: 10/10 tests passed
+🎉 All tone filter integration tests passed!
+
+✅ Tone filter successfully integrated with AI coach flow
+✅ Safe responses pass through
+✅ Unsafe responses trigger fallback
+✅ Logging structure compatible with database
+
+> strukt-system@1.0.0 test:supabase-smoke
+> node test/test-supabase-smoke.js
+
+🧪 Running Supabase Smoke Tests...
+
+📋 Test 1: Environment Configuration
+✅ SUPABASE_URL is defined in .env.example
+✅ SUPABASE_SERVICE_ROLE_KEY is defined in .env.example
+✅ DATA_BACKEND_PRIMARY is defined in .env.example
+✅ DUAL_WRITE is defined in .env.example
+✅ DATA_BACKEND_PRIMARY defaults to supabase
+✅ DUAL_WRITE defaults to false
+
+📋 Test 2: Module Loading (No Credentials Required)
+✅ userProfiles module loads successfully
+✅ Service defaults to supabase backend
+✅ Dual-write defaults to false
+
+📋 Test 3: Service Modules Loading
+✅ workouts service module loads successfully
+✅ workouts has input sanitization function
+✅ meals service module loads successfully
+✅ meals has input sanitization function
+✅ sleep service module loads successfully
+✅ sleep has input sanitization function
+✅ supplements service module loads successfully
+✅ supplements has input sanitization function
+✅ mood service module loads successfully
+✅ mood has input sanitization function
+✅ chat service module loads successfully
+✅ chat has input sanitization function
+
+📋 Test 4: Input Validation Security
+✅ Valid fields are preserved
+✅ Unknown fields are stripped for security
+✅ Null values are handled safely
+
+📋 Test 5: Database Schema
+✅ Initial schema migration file exists
+✅ Schema includes user_profiles table
+✅ Schema includes workouts table
+✅ Schema includes meals table
+✅ Schema includes sleep_logs table
+✅ Schema includes supplements table
+✅ Schema includes mood_logs table
+✅ Schema includes chat_interactions table
+
+🎯 Smoke Test Summary:
+✅ All smoke tests passed! Supabase integration is ready.
+
+📋 Next Steps for Full Integration:
+1. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment
+2. Run the full integration test: npm run test:integration
+3. Test with real credentials in a dev environment
+
+> strukt-system@1.0.0 test:supabase-integration
+> node test/test-supabase-integration.js
+
+🧪 Testing Supabase Integration...
+
+✅ Supabase client module loads successfully
+✅ User Profiles service loads successfully
+📊 Service Config: {
+  DATA_BACKEND_PRIMARY: 'supabase',
+  DUAL_WRITE: false,
+  TABLE: 'user_profiles'
+}
+✅ Primary backend correctly set to Supabase
+✅ workouts service loads successfully
+✅ meals service loads successfully
+✅ sleep service loads successfully
+✅ supplements service loads successfully
+✅ mood service loads successfully
+✅ chat service loads successfully
+✅ ETL module loads successfully
+📊 Field mappings configured: 53 fields
+✅ ETL mapping function works correctly
+📝 Sample mapping result: email, user_id, full_name, primary_goal, data_env
+
+🎉 All basic integration tests completed!
+
+📋 Next Steps:
+1. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables
+2. Test actual Supabase connectivity with real credentials
+3. Run ETL script with real Airtable data
+4. Test dual-write functionality
