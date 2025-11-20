@@ -9,6 +9,7 @@ const { analyzeWorkoutImage, analyzeMealImage } = require('../services/aiExtensi
 const { logMeal } = require('../services/logs/meals');
 const { logWorkout } = require('../services/logs/workouts');
 const logger = require('../lib/logger');
+const { PHOTO_UPLOAD } = require('../config/constants');
 
 const router = express.Router();
 
@@ -36,7 +37,72 @@ router.post('/v1/log-image', authenticateJWT, async (req, res) => {
         message: 'Either imageUrl or imageBase64 is required',
       });
     }
-    
+
+    // Validate imageBase64 if provided
+    if (imageBase64) {
+      try {
+        // Check if it's a data URI or just base64
+        let imageData = imageBase64;
+        if (!imageBase64.startsWith('data:')) {
+          // Assume it's raw base64, prepend data URI header
+          imageData = `data:image/jpeg;base64,${imageBase64}`;
+        }
+
+        // Extract format from data URI
+        const matches = imageData.match(/^data:image\/(jpeg|jpg|png|webp);base64,/);
+
+        if (!matches) {
+          return res.status(400).json({
+            ok: false,
+            code: 'ERR_INVALID_FORMAT',
+            message: 'Invalid image format. Accepted formats: JPEG, PNG, WebP'
+          });
+        }
+
+        const format = matches[1];
+
+        // Check format is allowed
+        if (!PHOTO_UPLOAD.ALLOWED_FORMATS.includes(format.toLowerCase())) {
+          return res.status(400).json({
+            ok: false,
+            code: 'ERR_INVALID_FORMAT',
+            message: `Invalid image format: ${format}. Accepted formats: JPEG, PNG, WebP`
+          });
+        }
+
+        // Calculate size
+        const base64Data = imageData.split(',')[1];
+        const sizeInBytes = Buffer.byteLength(base64Data, 'base64');
+        const sizeInMB = sizeInBytes / (1024 * 1024);
+
+        if (sizeInMB > PHOTO_UPLOAD.MAX_SIZE_MB) {
+          return res.status(400).json({
+            ok: false,
+            code: 'ERR_FILE_TOO_LARGE',
+            message: `Image exceeds maximum size of ${PHOTO_UPLOAD.MAX_SIZE_MB}MB (current: ${sizeInMB.toFixed(2)}MB)`
+          });
+        }
+
+        logger.info('Image upload validated', {
+          format,
+          sizeInMB: sizeInMB.toFixed(2),
+          operation: 'image-validation'
+        });
+
+      } catch (error) {
+        logger.error('Image validation error', {
+          error: error.message,
+          operation: 'image-validation'
+        });
+
+        return res.status(400).json({
+          ok: false,
+          code: 'ERR_VALIDATION_FAILED',
+          message: 'Failed to validate image data'
+        });
+      }
+    }
+
     logger.info('Image log requested', {
       requestId: req.requestId,
       userIdMasked: logger.maskUserId(req.userId),
