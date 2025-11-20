@@ -82,6 +82,28 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// JSON parsing error handler
+// Catches SyntaxError from malformed JSON and returns 400 instead of 500
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    logger.warn('Invalid JSON received', {
+      requestId: req.requestId,
+      path: req.path,
+      method: req.method,
+      error: err.message,
+    });
+
+    return res.status(400).json({
+      ok: false,
+      code: 'ERR_INVALID_JSON',
+      message: 'Invalid JSON format in request body',
+    });
+  }
+
+  // Pass other errors to next error handler
+  next(err);
+});
+
 // Handle request timeouts gracefully
 app.use((req, res, next) => {
   // Set timeout for this specific request
