@@ -16,4 +16,10 @@ module.exports = {
     KEEP_ALIVE_TIMEOUT: 35000,     // 35 seconds (higher than request timeout)
     HEADERS_TIMEOUT: 36000,        // 36 seconds (higher than keep-alive)
   },
+
+  TRANSCRIPTION: {
+    MAX_LENGTH_CHARS: 5000,        // Maximum transcribed text length
+    MAX_AUDIO_DURATION_SEC: 300,   // 5 minutes max audio duration
+    MAX_AUDIO_SIZE_MB: 25,         // Whisper API limit
+  },
 };

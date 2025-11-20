@@ -11,6 +11,7 @@ const { getNutritionForFoods, calculateTotals } = require('../services/nutrition
 const { supabaseAdmin } = require('../lib/supabaseServer');
 const logger = require('../lib/logger');
 const { createVoiceLogLimiter } = require('../lib/rateLimit');
+const { TRANSCRIPTION } = require('../config/constants');
 
 const router = express.Router();
 const voiceLimiter = createVoiceLogLimiter();
@@ -50,6 +51,23 @@ router.post('/v1/meals/voice-log', authenticateJWT, voiceLimiter, requireOpenAIC
         ok: false,
         code: 'ERR_INVALID_TRANSCRIPTION',
         message: 'Transcription is required and must be a non-empty string',
+      });
+    }
+
+    // Validate transcription length to prevent resource exhaustion
+    if (transcription.length > TRANSCRIPTION.MAX_LENGTH_CHARS) {
+      logger.warn('Transcription exceeds maximum length', {
+        requestId: req.requestId,
+        userIdMasked: logger.maskUserId(req.userId),
+        transcriptionLength: transcription.length,
+        maxLength: TRANSCRIPTION.MAX_LENGTH_CHARS,
+        operation: 'voice-log-validation',
+      });
+
+      return res.status(400).json({
+        ok: false,
+        code: 'ERR_TRANSCRIPTION_TOO_LONG',
+        message: `Transcription exceeds maximum length of ${TRANSCRIPTION.MAX_LENGTH_CHARS} characters (current: ${transcription.length} characters). Please record a shorter message.`,
       });
     }
 
