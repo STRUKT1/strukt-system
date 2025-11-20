@@ -6,7 +6,7 @@ const express = require('express');
 const { authenticateJWT } = require('../lib/auth');
 const { validateProfileMiddleware } = require('../validation/profile');
 const { getProfile, upsertProfile } = require('../services/profileService');
-const { exportUserData } = require('../services/dataExportService');
+const { exportUserData, deleteUserData } = require('../services/dataExportService');
 const { createUserRateLimit } = require('../lib/rateLimit');
 const logger = require('../lib/logger');
 
@@ -124,6 +124,86 @@ router.get('/v1/profile/export', authenticateJWT, sarLimiter, async (req, res) =
       ok: false,
       code: 'ERR_EXPORT_FAILED',
       message: 'Failed to export data. Please try again later.',
+    });
+  }
+});
+
+// Deletion requests limited to 2 per day per user (prevent abuse/accidents)
+const deletionLimiter = createUserRateLimit(24 * 60 * 60 * 1000, 2, 'Too many deletion requests. Please contact support if you need assistance.');
+
+/**
+ * DELETE /v1/profile
+ * Account Deletion - GDPR Article 17 (Right to Erasure)
+ *
+ * DANGER: This permanently deletes ALL user data with NO RECOVERY!
+ *
+ * Requires confirmation token in request body to prevent accidental deletion
+ */
+router.delete('/v1/profile', authenticateJWT, deletionLimiter, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { confirmation } = req.body;
+
+    // CRITICAL: Require confirmation to prevent accidental deletion
+    if (confirmation !== 'DELETE_MY_ACCOUNT_PERMANENTLY') {
+      logger.warn('Account deletion attempted without proper confirmation', {
+        requestId: req.requestId,
+        userIdMasked: logger.maskUserId(userId),
+        ip: req.ip,
+        operation: 'account-deletion-denied',
+      });
+
+      return res.status(400).json({
+        ok: false,
+        code: 'ERR_CONFIRMATION_REQUIRED',
+        message: 'Account deletion requires confirmation. Please provide confirmation: "DELETE_MY_ACCOUNT_PERMANENTLY"',
+      });
+    }
+
+    logger.warn('Account deletion confirmed and initiated', {
+      requestId: req.requestId,
+      userIdMasked: logger.maskUserId(userId),
+      ip: req.ip,
+      operation: 'account-deletion-initiated',
+      WARNING: 'PERMANENT_DELETION',
+    });
+
+    // Execute deletion
+    const deletionResult = await deleteUserData(userId);
+
+    // Log final success
+    logger.warn('Account deletion successful', {
+      requestId: req.requestId,
+      userIdMasked: logger.maskUserId(userId),
+      operation: 'account-deletion-success',
+      deletion_counts: deletionResult.deletion_counts,
+      errors_count: deletionResult.errors.length,
+    });
+
+    // Return success response
+    res.status(200).json({
+      ok: true,
+      message: 'Account successfully deleted. All data has been permanently removed.',
+      deletion_result: {
+        timestamp: deletionResult.deletion_timestamp,
+        tables_deleted: Object.keys(deletionResult.deletion_counts).length,
+        total_records_deleted: Object.values(deletionResult.deletion_counts).reduce((a, b) => a + b, 0),
+        errors: deletionResult.errors.length > 0 ? deletionResult.errors : undefined,
+      },
+    });
+
+  } catch (error) {
+    logger.error('Account deletion endpoint error', {
+      requestId: req.requestId,
+      userIdMasked: req.userId ? logger.maskUserId(req.userId) : undefined,
+      error: error.message,
+      operation: 'account-deletion-error',
+    });
+
+    res.status(500).json({
+      ok: false,
+      code: 'ERR_DELETION_FAILED',
+      message: 'Failed to delete account. Please contact support for assistance.',
     });
   }
 });
