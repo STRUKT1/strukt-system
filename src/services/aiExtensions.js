@@ -3,10 +3,14 @@
  *
  * Provides specialized AI functions for intent recognition, entity extraction,
  * and vision analysis using OpenAI GPT-4o
+ *
+ * SECURITY: All user profile data is sanitized before sending to OpenAI
+ * to minimize PII exposure (HIGH-005)
  */
 
 const { OpenAI } = require('openai');
 const logger = require('../lib/logger');
+const { sanitizeProfileForAI } = require('../lib/piiMask');
 
 // Initialize OpenAI client with error handling
 let openai = null;
@@ -179,27 +183,31 @@ async function analyzeMealImage(imageUrl) {
 
 /**
  * Generate personalized workout and nutrition plans based on user profile
- * 
+ *
  * @param {Object} userProfile - Complete user profile
  * @returns {Promise<Object>} Generated plans
  */
 async function generateInitialPlans(userProfile) {
   checkOpenAI();
-  
+
+  // SECURITY: Sanitize profile to remove PII (email, full name, etc.)
+  const profile = sanitizeProfileForAI(userProfile);
+
   const prompt = `You are an expert fitness and nutrition coach. Based on the user's profile, generate initial workout and nutrition plans.
 
 User Profile:
-- Goals: ${userProfile.primary_goal || 'general fitness'}
-- WHY: ${userProfile.why_statement || 'Not provided'}
-- Target Event: ${userProfile.target_event || 'None'} ${userProfile.target_event_date ? `on ${userProfile.target_event_date}` : ''}
-- Fitness Experience: ${userProfile.fitness_experience || 'beginner'}
-- Days per week: ${userProfile.days_per_week || 3}
-- Session minutes: ${userProfile.session_minutes || 30}
-- Equipment: ${userProfile.equipment_access || 'bodyweight'}
-- Dietary restrictions: ${userProfile.dietary_restrictions || 'none'}
-- Medical conditions: ${userProfile.conditions || 'none'}
-- Pregnant/Breastfeeding: ${userProfile.is_pregnant_or_breastfeeding ? 'Yes' : 'No'}
-- Recovering from surgery: ${userProfile.is_recovering_from_surgery ? 'Yes' : 'No'}
+- Name: ${profile.firstName || 'there'}
+- Goals: ${profile.primary_goal || 'general fitness'}
+- WHY: ${profile.why_statement || 'Not provided'}
+- Target Event: ${profile.target_event || 'None'} ${profile.target_event_date ? `on ${profile.target_event_date}` : ''}
+- Fitness Experience: ${profile.fitness_experience || profile.experience_level || 'beginner'}
+- Days per week: ${profile.days_per_week || 3}
+- Session minutes: ${profile.session_minutes || 30}
+- Equipment: ${profile.equipment_access || 'bodyweight'}
+- Dietary restrictions: ${profile.dietary_restrictions || 'none'}
+- Medical conditions: ${profile.conditions || 'none'}
+- Pregnant/Breastfeeding: ${profile.is_pregnant_or_breastfeeding ? 'Yes' : 'No'}
+- Recovering from surgery: ${profile.is_recovering_from_surgery ? 'Yes' : 'No'}
 
 Respond ONLY with a valid JSON object:
 {
@@ -244,20 +252,24 @@ Respond ONLY with a valid JSON object:
 
 /**
  * Generate daily focus point based on user profile and recent activity
- * 
+ *
  * @param {Object} userProfile - User profile
  * @param {Object} recentActivity - Recent sleep, mood, etc.
  * @returns {Promise<string>} Daily focus text
  */
 async function generateDailyFocus(userProfile, recentActivity = {}) {
   checkOpenAI();
-  
+
+  // SECURITY: Sanitize profile to remove PII (email, full name, etc.)
+  const profile = sanitizeProfileForAI(userProfile);
+
   const prompt = `Based on the user's profile and their recent activity, provide a single, encouraging, and actionable focus point for their day. Keep it concise (2-3 sentences).
 
 User Profile:
-- Goals: ${userProfile.primary_goal || 'general fitness'}
-- WHY: ${userProfile.why_statement || 'Not provided'}
-- Coaching Persona: ${userProfile.coaching_persona || 'strategist'}
+- Name: ${profile.firstName || 'there'}
+- Goals: ${profile.primary_goal || 'general fitness'}
+- WHY: ${profile.why_statement || 'Not provided'}
+- Coaching Persona: ${profile.coaching_persona || 'strategist'}
 
 Recent Activity:
 - Sleep: ${recentActivity.sleep || 'No recent data'}
@@ -270,7 +282,7 @@ Provide a personalized, motivating focus point:`;
     const completion = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o',
       messages: [
-        { role: 'system', content: `You are a ${userProfile.coaching_persona || 'strategic'} fitness coach.` },
+        { role: 'system', content: `You are a ${profile.coaching_persona || 'strategic'} fitness coach.` },
         { role: 'user', content: prompt }
       ],
       temperature: 0.8,
@@ -291,19 +303,23 @@ Provide a personalized, motivating focus point:`;
 
 /**
  * Generate weekly review based on user's logs
- * 
+ *
  * @param {Object} userProfile - User profile
  * @param {Object} weeklyLogs - Logs from the past 7 days
  * @returns {Promise<string>} Weekly review text
  */
 async function generateWeeklyReview(userProfile, weeklyLogs = {}) {
   checkOpenAI();
-  
+
+  // SECURITY: Sanitize profile to remove PII (email, full name, etc.)
+  const profile = sanitizeProfileForAI(userProfile);
+
   const prompt = `Analyze the user's data from the past 7 days and generate a summary, connecting actions to outcomes.
 
 User Profile:
-- Goals: ${userProfile.primary_goal || 'general fitness'}
-- WHY: ${userProfile.why_statement || 'Not provided'}
+- Name: ${profile.firstName || 'there'}
+- Goals: ${profile.primary_goal || 'general fitness'}
+- WHY: ${profile.why_statement || 'Not provided'}
 
 Weekly Activity:
 - Workouts: ${weeklyLogs.workouts?.length || 0} sessions
@@ -320,7 +336,7 @@ Provide an insightful weekly review (3-5 sentences) that:
     const completion = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o',
       messages: [
-        { role: 'system', content: `You are a ${userProfile.coaching_persona || 'strategic'} fitness coach.` },
+        { role: 'system', content: `You are a ${profile.coaching_persona || 'strategic'} fitness coach.` },
         { role: 'user', content: prompt }
       ],
       temperature: 0.8,

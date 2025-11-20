@@ -1,12 +1,16 @@
 /**
  * Canonical STRUKT System Prompt Module
- * 
+ *
  * This module provides the single source of truth for the STRUKT system prompt
  * and handles injection of user state (profile, plan, memory) into LLM calls.
+ *
+ * SECURITY: All user profiles should be sanitized before being passed to this module
+ * to ensure no PII (email, full name, etc.) is sent to OpenAI (HIGH-005)
  */
 
 const fs = require('fs');
 const path = require('path');
+const { sanitizeProfileForAI } = require('../lib/piiMask');
 
 // Load the base system prompt once at module initialization
 const baseSystemPrompt = fs.readFileSync(
@@ -16,15 +20,15 @@ const baseSystemPrompt = fs.readFileSync(
 
 /**
  * Generate the complete STRUKT system prompt with user context
- * 
- * @param {Object} profile - User profile data (goals, preferences, dietary needs, etc.)
+ *
+ * @param {Object} profile - User profile data (should be sanitized by caller)
  * @param {Object} plan - User's current plan or program data
  * @param {Array} memory - Recent chat history and interactions
  * @returns {string} Complete system prompt with user context
  */
 function getStruktSystemPrompt(profile = null, plan = null, memory = null) {
   const promptSections = [baseSystemPrompt];
-  
+
   // Add memory context if available
   if (memory && memory.length > 0) {
     const memoryContext = buildMemoryContext(memory);
@@ -32,15 +36,18 @@ function getStruktSystemPrompt(profile = null, plan = null, memory = null) {
       promptSections.push(memoryContext);
     }
   }
-  
+
   // Add user profile context if available
   if (profile) {
-    const profileContext = buildProfileContext(profile);
+    // SECURITY: Double-check sanitization to prevent PII leaks
+    // Caller should sanitize, but we enforce it here as a safety net
+    const sanitized = sanitizeProfileForAI(profile);
+    const profileContext = buildProfileContext(sanitized);
     if (profileContext) {
       promptSections.push(profileContext);
     }
   }
-  
+
   // Add plan context if available
   if (plan) {
     const planContext = buildPlanContext(plan);
@@ -48,7 +55,7 @@ function getStruktSystemPrompt(profile = null, plan = null, memory = null) {
       promptSections.push(planContext);
     }
   }
-  
+
   return promptSections.filter(Boolean).join('\n\n');
 }
 
@@ -70,13 +77,17 @@ function buildMemoryContext(memory) {
 
 /**
  * Build profile context from user data
- * 
- * @param {Object} profile - User profile fields
+ *
+ * @param {Object} profile - User profile fields (should already be sanitized)
  * @returns {string|null} Formatted profile context
  */
 function buildProfileContext(profile) {
   if (!profile || typeof profile !== 'object') return null;
-  
+
+  // SECURITY NOTE: This function assumes profile is already sanitized
+  // It only uses firstName (not full_name), and fitness-relevant fields
+  // No email, user_id, or other PII should be present in sanitized profiles
+
   const sections = [];
   
   // PERSONA INJECTION

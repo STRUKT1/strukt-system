@@ -18,6 +18,7 @@ const { getUserProfile } = require('./userProfiles');
 const { savePlan, getLatestPlan } = require('./planservice');
 const { supabaseAdmin } = require('../lib/supabaseServer');
 const logger = require('../lib/logger');
+const { sanitizeProfileForAI } = require('../lib/piiMask');
 
 // Environment flags
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -270,33 +271,29 @@ function calculateAvgMood(moodLogs) {
 
 /**
  * Build AI prompt for plan generation
- * @param {Object} profile - User profile
+ * @param {Object} profile - User profile (should be sanitized before passing)
  * @param {Object} wellnessContext - Recent wellness data
  * @returns {string} Formatted prompt
  */
 function buildPlanPrompt(profile, wellnessContext) {
-  // Null-safe field access with optional chaining and nullish coalescing
-  const fullName = profile?.full_name || 'User';
-  const primaryGoal = profile?.primary_goal || 'general wellness';
-  const experienceLevel = profile?.experience_level || 'beginner';
-  const injuries = profile?.injuries?.join(', ') || 'none reported';
-  const conditions = profile?.conditions?.join(', ') || 'none reported';
-  const dietPattern = profile?.diet_pattern || 'no specific pattern';
-  const allergies = profile?.allergies?.join(', ') || 'none reported';
-  const coachingTone = profile?.coaching_tone || 'supportive';
-  const daysPerWeek = profile?.days_per_week || 3;
-  const sessionMinutes = profile?.session_minutes || 45;
-  const equipmentAccess = profile?.equipment_access?.join(', ') || 'bodyweight only';
-  
-  // Log warning if critical fields are missing
-  if (!profile?.user_id) {
-    logger.warn('Profile missing user_id - plan may not be saved correctly', {
-      operation: 'build-plan-prompt',
-      issue: 'missing-user-id'
-    });
-  }
+  // SECURITY: Use sanitized profile with first name only (no full name, no email)
+  // Sanitization should be done by caller, but we double-check here for safety
+  const sanitized = sanitizeProfileForAI(profile);
 
-  return `Generate a comprehensive personalized fitness and nutrition plan for ${fullName}.
+  // Null-safe field access with optional chaining and nullish coalescing
+  const firstName = sanitized?.firstName || 'there';
+  const primaryGoal = sanitized?.primary_goal || 'general wellness';
+  const experienceLevel = sanitized?.experience_level || 'beginner';
+  const injuries = sanitized?.injuries?.join(', ') || 'none reported';
+  const conditions = sanitized?.conditions?.join(', ') || 'none reported';
+  const dietPattern = sanitized?.diet_pattern || 'no specific pattern';
+  const allergies = sanitized?.allergies?.join(', ') || 'none reported';
+  const coachingTone = sanitized?.coaching_tone || 'supportive';
+  const daysPerWeek = sanitized?.days_per_week || 3;
+  const sessionMinutes = sanitized?.session_minutes || 45;
+  const equipmentAccess = sanitized?.equipment_access?.join(', ') || 'bodyweight only';
+
+  return `Generate a comprehensive personalized fitness and nutrition plan for ${firstName}.
 
 PROFILE INFORMATION:
 - Primary Goal: ${primaryGoal}

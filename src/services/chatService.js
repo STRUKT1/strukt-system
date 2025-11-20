@@ -1,6 +1,9 @@
 /**
  * Chat Service for v1 API
  * Implements "Magic Log" - conversational logging with intent recognition
+ *
+ * SECURITY: All user profiles are sanitized before sending to OpenAI
+ * to minimize PII exposure (HIGH-005)
  */
 
 const { logChatInteraction } = require('./logs/chat');
@@ -17,6 +20,7 @@ const { parseFoodFromText } = require('./foodParsingService');
 const { getNutritionForFoods, calculateTotals } = require('./nutritionDatabaseService');
 const { supabaseAdmin } = require('../lib/supabaseServer');
 const logger = require('../lib/logger');
+const { sanitizeProfileForAI } = require('../lib/piiMask');
 
 /**
  * Create new chat interaction with magic logging
@@ -272,20 +276,23 @@ function generateConfirmationMessage(logType, logData) {
 async function generateChatReply(userId, userMessage) {
   try {
     // Get user profile for context
-    const profile = await getUserProfile(userId);
-    
+    const rawProfile = await getUserProfile(userId);
+
+    // SECURITY: Sanitize profile to remove PII before sending to OpenAI
+    const profile = sanitizeProfileForAI(rawProfile);
+
     // Get recent chat history for context
     const chatHistory = await getChatHistory(userId, 5);
-    
-    // Build system prompt with context
+
+    // Build system prompt with context (now receives sanitized profile)
     const systemPrompt = getStruktSystemPrompt(profile, null, chatHistory);
-    
+
     // Generate reply
     const messages = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage }
     ];
-    
+
     const reply = await getAIReply(messages);
     return reply;
   } catch (error) {
