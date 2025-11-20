@@ -133,6 +133,7 @@ router.post('/v1/templates', authenticateJWT, templateLimiter, async (req, res) 
       requestId: req.requestId,
       userIdMasked: logger.maskUserId(userId),
       type,
+      dataSize: Buffer.byteLength(JSON.stringify(data), 'utf8'),
     });
 
     // Validate input
@@ -214,6 +215,7 @@ router.put('/v1/templates/:id', authenticateJWT, templateLimiter, async (req, re
       requestId: req.requestId,
       userIdMasked: logger.maskUserId(userId),
       templateId: id,
+      dataSize: updates.data ? Buffer.byteLength(JSON.stringify(updates.data), 'utf8') : undefined,
     });
 
     // Validate input

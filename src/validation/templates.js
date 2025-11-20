@@ -28,6 +28,18 @@ function validateTemplate({ name, type, data }) {
     return { valid: false, error: 'Template data is required' };
   }
 
+  // Validate data size (100KB limit)
+  const serialized = JSON.stringify(data);
+  const sizeInBytes = Buffer.byteLength(serialized, 'utf8');
+  const maxSizeBytes = 100 * 1024; // 100KB
+
+  if (sizeInBytes > maxSizeBytes) {
+    return {
+      valid: false,
+      error: `Template data exceeds maximum size of 100KB (current: ${Math.round(sizeInBytes / 1024)}KB)`
+    };
+  }
+
   // Validate meal template data
   if (type.startsWith('meal_')) {
     if (!data.foods || !Array.isArray(data.foods) || data.foods.length === 0) {
@@ -96,7 +108,18 @@ function validateTemplateUpdate(updates) {
     if (typeof updates.data !== 'object') {
       return { valid: false, error: 'Template data must be an object' };
     }
-    // Additional data validation could go here
+
+    // Validate data size (100KB limit)
+    const serialized = JSON.stringify(updates.data);
+    const sizeInBytes = Buffer.byteLength(serialized, 'utf8');
+    const maxSizeBytes = 100 * 1024; // 100KB
+
+    if (sizeInBytes > maxSizeBytes) {
+      return {
+        valid: false,
+        error: `Template data exceeds maximum size of 100KB (current: ${Math.round(sizeInBytes / 1024)}KB)`
+      };
+    }
   }
 
   return { valid: true };
