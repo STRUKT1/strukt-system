@@ -19,6 +19,7 @@
     "test:audit-validation": "node scripts/validateDashboardAudit.js",
     "test:dashboard-audit": "node __tests__/dashboardAudit.test.js",
     "test:cron-functions": "node __tests__/cronFunctions.test.js",
+    "test:security": "jest __tests__/security/ --verbose --detectOpenHandles --forceExit",
     "simulate:digest": "node scripts/simulateDigest.js",
     "verify:phase3": "node scripts/verifyPhase3Integrity.js",
     "validate-schema": "node scripts/validate_airtable_schema.mjs"
@@ -37,6 +38,9 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@expo/cli": "^0.21.0"
+    "@expo/cli": "^0.21.0",
+    "@types/supertest": "^6.0.3",
+    "jest": "^30.2.0",
+    "supertest": "^7.1.4"
   }
 }
