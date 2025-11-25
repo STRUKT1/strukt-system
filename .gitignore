@@ -1,3 +1,9 @@
+# Environment variables - NEVER commit real .env files!
+.env
+.env.local
+.env.*.local
+!.env.example
+
 # Dependencies
 node_modules/
 npm-debug.log*
