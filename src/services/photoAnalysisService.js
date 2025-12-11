@@ -69,6 +69,68 @@ Return ONLY a valid JSON object with this structure:
   "notes": "any additional relevant information visible"
 }`;
 
+// System prompt for sleep tracker screenshot analysis
+const SLEEP_ANALYSIS_PROMPT = `You are an expert at analyzing sleep tracker screenshots from various apps and devices.
+
+Carefully examine this image and extract ALL visible sleep data.
+
+Common apps/devices: Apple Watch (Health app), Oura Ring, Whoop, Fitbit, Garmin Connect, Samsung Health, Sleep Cycle, AutoSleep, Pillow, SleepWatch, etc.
+
+Extract the following if visible:
+- Total sleep duration (in hours and minutes)
+- Bed time (when user went to bed)
+- Wake time (when user woke up)
+- Deep sleep duration (slow wave sleep)
+- REM sleep duration
+- Light sleep duration
+- Awake time during night
+- Sleep score or rating (if shown)
+- Heart rate data during sleep (if shown)
+- Respiratory rate (if shown)
+- HRV (heart rate variability) if shown
+- Blood oxygen (SpO2) if shown
+- Date of sleep session
+- Source app/device name
+
+IMPORTANT RULES:
+1. Only extract data that is CLEARLY VISIBLE in the image
+2. Do NOT hallucinate or guess data that isn't shown
+3. If a field is not visible, set it to null
+4. Convert all durations to minutes
+5. For times, preserve the format shown (12hr or 24hr)
+6. Be precise with numbers - don't round unless necessary
+7. If only total sleep time is shown, don't try to infer sleep stages
+
+Sleep Quality estimation (1-10):
+- 9-10: 7-9 hours total, good deep/REM balance, minimal awake time, high sleep score
+- 7-8: 6-7 hours or 9+ hours, decent sleep stages, some interruptions
+- 5-6: 5-6 hours, imbalanced stages, multiple wake-ups
+- 3-4: 4-5 hours, poor quality indicators
+- 1-2: Less than 4 hours or severely disrupted
+
+Confidence levels:
+- "high": All key data clearly visible and readable
+- "medium": Most data visible but some may be partially obscured or unclear
+- "low": Only partial data visible or image quality is poor
+
+Return ONLY a valid JSON object with this structure:
+{
+  "confidence": "high|medium|low",
+  "totalSleepMinutes": number or null,
+  "totalSleepHours": number or null (decimal hours, e.g., 7.5),
+  "bedTime": "string or null (format as shown in screenshot)",
+  "wakeTime": "string or null (format as shown in screenshot)",
+  "sleepQuality": number (1-10 estimate based on data),
+  "deepSleepMinutes": number or null,
+  "remSleepMinutes": number or null,
+  "lightSleepMinutes": number or null,
+  "awakeMinutes": number or null,
+  "sleepScore": number or null (the score shown in the app, not your estimate),
+  "source": "string or null (detected app/device name)",
+  "date": "YYYY-MM-DD or null",
+  "notes": "any additional relevant observations about the sleep data shown"
+}`;
+
 // System prompt for meal photo analysis
 const MEAL_ANALYSIS_PROMPT = `You are a nutrition expert analyzing food photos to estimate nutrition content.
 
@@ -537,7 +599,156 @@ function formatDuration(minutes) {
   return `${mins}min`;
 }
 
+/**
+ * Analyze a sleep tracker screenshot and extract structured sleep data
+ * @param {string} imageBase64 - Base64 encoded sleep tracker screenshot
+ * @param {string} userId - User ID for logging
+ * @param {string} hint - Optional hint about the image source
+ * @returns {Promise<Object>} Extracted sleep data
+ */
+async function analyzeSleepPhoto(imageBase64, userId, hint = null) {
+  // Validate image
+  const validation = validateImage(imageBase64);
+  if (!validation.valid) {
+    const error = new Error(validation.error);
+    error.code = 'INVALID_IMAGE';
+    throw error;
+  }
+
+  logger.info('Analyzing sleep tracker screenshot', {
+    userIdMasked: logger.maskUserId(userId),
+    hint,
+  });
+
+  try {
+    // Add hint to prompt if provided
+    let prompt = SLEEP_ANALYSIS_PROMPT;
+    if (hint) {
+      prompt += `\n\nHint: User indicated this is from ${hint}.`;
+    }
+
+    const extractedData = await analyzeImageWithVision(
+      imageBase64,
+      prompt,
+      userId
+    );
+
+    // Validate that we got meaningful data
+    const hasData = extractedData.totalSleepMinutes ||
+                    extractedData.totalSleepHours ||
+                    extractedData.bedTime ||
+                    extractedData.wakeTime;
+
+    if (!hasData) {
+      logger.info('No sleep data found in image', {
+        userIdMasked: logger.maskUserId(userId),
+        confidence: extractedData.confidence,
+      });
+
+      return {
+        confidence: 'low',
+        extracted: {},
+        message: "Couldn't find clear sleep data. Try a different screenshot or manual entry.",
+      };
+    }
+
+    // Normalize the data - ensure consistent fields
+    const normalizedData = {
+      totalSleepMinutes: extractedData.totalSleepMinutes || null,
+      totalSleepHours: extractedData.totalSleepHours ||
+        (extractedData.totalSleepMinutes ? Math.round((extractedData.totalSleepMinutes / 60) * 100) / 100 : null),
+      bedTime: extractedData.bedTime || null,
+      wakeTime: extractedData.wakeTime || null,
+      sleepQuality: Math.min(10, Math.max(1, extractedData.sleepQuality || 5)),
+      deepSleepMinutes: extractedData.deepSleepMinutes || null,
+      remSleepMinutes: extractedData.remSleepMinutes || null,
+      lightSleepMinutes: extractedData.lightSleepMinutes || null,
+      awakeMinutes: extractedData.awakeMinutes || null,
+      sleepScore: extractedData.sleepScore || null,
+      source: extractedData.source || 'Unknown',
+      date: extractedData.date || new Date().toISOString().split('T')[0],
+      notes: extractedData.notes || '',
+    };
+
+    // Generate confirmation message
+    const message = generateSleepMessage(normalizedData, extractedData.confidence);
+
+    logger.info('Sleep photo analysis successful', {
+      userIdMasked: logger.maskUserId(userId),
+      confidence: extractedData.confidence,
+      totalSleepHours: normalizedData.totalSleepHours,
+      source: normalizedData.source,
+    });
+
+    return {
+      confidence: extractedData.confidence || 'medium',
+      extracted: normalizedData,
+      message,
+    };
+  } catch (error) {
+    logger.error('Sleep photo analysis failed', {
+      userIdMasked: logger.maskUserId(userId),
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Generate confirmation message for sleep analysis
+ * @param {Object} data - Extracted sleep data
+ * @param {string} confidence - Confidence level
+ * @returns {string} Confirmation message
+ */
+function generateSleepMessage(data, confidence) {
+  const parts = [];
+
+  // Main sleep duration
+  if (data.totalSleepHours) {
+    const hours = Math.floor(data.totalSleepHours);
+    const minutes = Math.round((data.totalSleepHours - hours) * 60);
+    if (minutes > 0) {
+      parts.push(`Found ${hours}h ${minutes}min of sleep`);
+    } else {
+      parts.push(`Found ${hours}h of sleep`);
+    }
+  } else if (data.totalSleepMinutes) {
+    const formattedDuration = formatDuration(data.totalSleepMinutes);
+    parts.push(`Found ${formattedDuration} of sleep`);
+  }
+
+  // Bed/wake times
+  if (data.bedTime && data.wakeTime) {
+    parts.push(`${data.bedTime} - ${data.wakeTime}`);
+  }
+
+  // Sleep score if available
+  if (data.sleepScore) {
+    parts.push(`Score: ${data.sleepScore}`);
+  }
+
+  // Source
+  if (data.source && data.source !== 'Unknown') {
+    parts.push(`from ${data.source}`);
+  }
+
+  let message = parts.join('. ');
+  if (!message.endsWith('.')) {
+    message += '.';
+  }
+
+  // Add confidence note
+  if (confidence === 'low') {
+    message += ' Please review and adjust if needed.';
+  } else {
+    message += ' Ready to log?';
+  }
+
+  return message;
+}
+
 module.exports = {
   analyzeWorkoutPhoto,
   analyzeMealPhoto,
+  analyzeSleepPhoto,
 };

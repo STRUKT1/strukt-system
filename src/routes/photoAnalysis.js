@@ -7,7 +7,7 @@ const express = require('express');
 const { authenticateJWT } = require('../lib/auth');
 const { requireOpenAIConsent } = require('../lib/gdprConsent');
 const { createPhotoAnalysisLimiter } = require('../lib/rateLimit');
-const { analyzeWorkoutPhoto, analyzeMealPhoto } = require('../services/photoAnalysisService');
+const { analyzeWorkoutPhoto, analyzeMealPhoto, analyzeSleepPhoto } = require('../services/photoAnalysisService');
 const logger = require('../lib/logger');
 const { PHOTO_UPLOAD } = require('../config/constants');
 
@@ -310,6 +310,124 @@ router.post('/v1/photos/analyze-meal', authenticateJWT, photoAnalysisLimiter, re
     });
   } catch (error) {
     logger.error('Meal photo analysis failed', {
+      requestId: req.requestId,
+      userIdMasked: logger.maskUserId(req.userId),
+      error: error.message,
+      code: error.code,
+    });
+
+    // Handle specific error types
+    if (error.code === 'INVALID_IMAGE') {
+      return res.status(400).json({
+        ok: false,
+        code: 'ERR_INVALID_IMAGE',
+        message: error.message,
+      });
+    }
+
+    if (error.code === 'RATE_LIMIT_EXCEEDED' || error.status === 429) {
+      return res.status(429).json({
+        ok: false,
+        code: 'ERR_RATE_LIMIT',
+        message: 'Too many requests. Please try again in a moment.',
+      });
+    }
+
+    if (error.message && error.message.includes('OpenAI')) {
+      return res.status(503).json({
+        ok: false,
+        code: 'ERR_AI_SERVICE_UNAVAILABLE',
+        message: 'AI service temporarily unavailable. Please try again.',
+      });
+    }
+
+    // Generic error response
+    res.status(500).json({
+      ok: false,
+      code: 'ERR_ANALYSIS_FAILED',
+      message: 'Failed to analyze photo. Please try again.',
+    });
+  }
+});
+
+/**
+ * POST /v1/photos/analyze-sleep
+ * Analyze a sleep tracker screenshot using GPT-4 Vision
+ *
+ * Request body:
+ * {
+ *   "photo": "data:image/jpeg;base64,/9j/4AAQ...",
+ *   "hint": "apple_watch" (optional: hint about the source app/device)
+ * }
+ *
+ * Response:
+ * {
+ *   "ok": true,
+ *   "data": {
+ *     "type": "sleep",
+ *     "confidence": "high|medium|low",
+ *     "extracted": {
+ *       "totalSleepMinutes": 420,
+ *       "totalSleepHours": 7.0,
+ *       "bedTime": "23:30",
+ *       "wakeTime": "06:30",
+ *       "sleepQuality": 8,
+ *       "deepSleepMinutes": 90,
+ *       "remSleepMinutes": 105,
+ *       "lightSleepMinutes": 200,
+ *       "awakeMinutes": 25,
+ *       "sleepScore": 85,
+ *       "source": "Apple Watch",
+ *       "date": "2024-12-11",
+ *       "notes": "Good sleep with minimal interruptions"
+ *     },
+ *     "message": "Found 7h of sleep. 23:30 - 06:30. Score: 85. from Apple Watch. Ready to log?"
+ *   }
+ * }
+ */
+router.post('/v1/photos/analyze-sleep', authenticateJWT, photoAnalysisLimiter, requireOpenAIConsent, validatePhotoUpload, async (req, res) => {
+  try {
+    const { photo, hint } = req.body;
+
+    // Validate input
+    if (!photo || typeof photo !== 'string') {
+      return res.status(400).json({
+        ok: false,
+        code: 'ERR_INVALID_PHOTO',
+        message: 'Photo is required and must be a base64 encoded string',
+      });
+    }
+
+    logger.info('Sleep photo analysis requested', {
+      requestId: req.requestId,
+      userIdMasked: logger.maskUserId(req.userId),
+      photoSize: photo.length,
+      hint,
+    });
+
+    // Analyze the sleep tracker screenshot
+    const result = await analyzeSleepPhoto(photo, req.userId, hint);
+
+    logger.info('Sleep photo analysis complete', {
+      requestId: req.requestId,
+      userIdMasked: logger.maskUserId(req.userId),
+      confidence: result.confidence,
+      hasData: Object.keys(result.extracted || {}).length > 0,
+      totalSleepHours: result.extracted?.totalSleepHours,
+    });
+
+    // Return success response
+    res.json({
+      ok: true,
+      data: {
+        type: 'sleep',
+        confidence: result.confidence,
+        extracted: result.extracted,
+        message: result.message,
+      },
+    });
+  } catch (error) {
+    logger.error('Sleep photo analysis failed', {
       requestId: req.requestId,
       userIdMasked: logger.maskUserId(req.userId),
       error: error.message,
